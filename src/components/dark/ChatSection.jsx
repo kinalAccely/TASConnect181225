@@ -21,7 +21,7 @@ const TEXTUAL_CONTENT_TYPES = new Set([
   "module",
 ]);
 
-const DEFAULT_LIVE_DEMO_STEPS = [
+const DEFAULT_TIMELINE_STEPS = [
   "Preparing environment",
   "Launching preview",
   "Streaming workflow",
@@ -287,9 +287,7 @@ const resolveMessageText = (message) => {
 };
 
 export default function ChatSection({
-  activeTab,
   chatBodyRef,
-  copyClicked,
   input,
   isLoading,
   messages,
@@ -301,7 +299,12 @@ export default function ChatSection({
   onInputChange,
   onSend,
   onStop,
-  onLiveDemoStepsChange,
+  onTimelineStepsChange,
+  streamError,
+  assistantSuggestions = [],
+  currentAssistantId,
+  onAssistantSuggestionSelect,
+  shouldShowAssistantSuggestions = false,
   isTransitioning = false,
 }) {
   const [stageHistory, setStageHistory] = React.useState([]);
@@ -309,7 +312,72 @@ export default function ChatSection({
   const [isAtBottom, setIsAtBottom] = React.useState(true);
   const [copiedMessageKey, setCopiedMessageKey] = React.useState(null);
   const copyTimeoutRef = React.useRef();
-  const isLiveDemo = activeTab === "Live Demo";
+  const suggestionItems = React.useMemo(() => {
+    if (!Array.isArray(assistantSuggestions) || assistantSuggestions.length === 0) {
+      return [];
+    }
+    const seenIds = new Set();
+    return assistantSuggestions
+      .map((option) => {
+        if (!option) {
+          return null;
+        }
+        if (typeof option === "string") {
+          const normalizedId = option.trim();
+          if (!normalizedId || seenIds.has(normalizedId)) {
+            return null;
+          }
+          seenIds.add(normalizedId);
+          return {
+            id: normalizedId,
+            label: normalizedId,
+            description: "",
+          };
+        }
+        const rawId =
+          typeof option.id === "string"
+            ? option.id
+            : typeof option.value === "string"
+              ? option.value
+              : "";
+        const normalizedId = rawId.trim();
+        if (!normalizedId || seenIds.has(normalizedId)) {
+          return null;
+        }
+        seenIds.add(normalizedId);
+        const label =
+          typeof option.label === "string" && option.label.trim().length > 0
+            ? option.label.trim()
+            : typeof option.title === "string" && option.title.trim().length > 0
+              ? option.title.trim()
+              : normalizedId;
+        const description =
+          typeof option.description === "string" && option.description.trim().length > 0
+            ? option.description.trim()
+            : typeof option.subtitle === "string" && option.subtitle.trim().length > 0
+              ? option.subtitle.trim()
+              : "";
+        return {
+          ...option,
+          id: normalizedId,
+          label,
+          description,
+        };
+      })
+      .filter(Boolean);
+  }, [assistantSuggestions]);
+  const normalizedCurrentAssistantId =
+    typeof currentAssistantId === "string" ? currentAssistantId.trim() : "";
+  const hasAssistantSuggestions =
+    shouldShowAssistantSuggestions && suggestionItems.length > 0;
+  const handleSuggestionClick = React.useCallback(
+    (option) => {
+      if (typeof onAssistantSuggestionSelect === "function") {
+        onAssistantSuggestionSelect(option);
+      }
+    },
+    [onAssistantSuggestionSelect],
+  );
   const normalizedSandboxUrl = React.useMemo(() => {
     if (typeof sandboxUrl !== "string") {
       return undefined;
@@ -344,7 +412,7 @@ export default function ChatSection({
   const isVideoPreview = Boolean(
     typeof normalizedSandboxUrl === "string" && /\.(mp4|webm|ogg|mov|m3u8|mkv)(\?.*)?$/i.test(normalizedSandboxUrl),
   );
-  const hasSandboxPreview = isLiveDemo && Boolean(normalizedSandboxUrl);
+  const hasSandboxPreview = Boolean(normalizedSandboxUrl);
 
   // Use normalizedSandboxUrl directly (WorkSpaceLayout now appends VNC path centrally).
 
@@ -531,30 +599,22 @@ export default function ChatSection({
         .filter(Boolean)
       : [];
 
-    if (isLiveDemo && hasSandboxPreview) {
-      return baseMessages.filter((msg) => msg.role === "user");
-    }
-
     return baseMessages;
-  }, [messages, isLiveDemo, hasSandboxPreview]);
+  }, [messages]);
 
-  const liveDemoSteps = React.useMemo(() => {
+  const timelineSteps = React.useMemo(() => {
     if (stageHistory.length > 0) {
       return stageHistory;
     }
-    return DEFAULT_LIVE_DEMO_STEPS;
+    return DEFAULT_TIMELINE_STEPS;
   }, [stageHistory]);
 
   React.useEffect(() => {
-    if (typeof onLiveDemoStepsChange !== "function") {
+    if (typeof onTimelineStepsChange !== "function") {
       return;
     }
-    if (isLiveDemo) {
-      onLiveDemoStepsChange(liveDemoSteps);
-    } else {
-      onLiveDemoStepsChange([]);
-    }
-  }, [isLiveDemo, liveDemoSteps, onLiveDemoStepsChange]);
+    onTimelineStepsChange(timelineSteps);
+  }, [timelineSteps, onTimelineStepsChange]);
 
   React.useEffect(() => {
     const container = chatBodyRef?.current;
@@ -603,9 +663,52 @@ export default function ChatSection({
         >
           <>
             {displayedMessages.length === 0 && (
-              <div className="rounded-3xl border border-dashed border-zinc-300 bg-zinc-900/30 px-5 py-6 text-center text-[11px] text-zinc-400">
-                Start by asking a question or switch modules to explore different stages of your flow.
-              </div>
+              hasAssistantSuggestions ? (
+                <div className="rounded-3xl border border-slate-800 bg-slate-950/70 px-6 py-6 text-left shadow-[0_18px_42px_rgba(2,6,23,0.55)]">
+                  <div className="flex flex-col gap-2">
+                    <span className="text-[10px] font-semibold uppercase tracking-[0.32em] text-slate-400">
+                      Choose a starting point
+                    </span>
+                    <h2 className="text-base font-semibold text-slate-100">
+                      Where should we begin?
+                    </h2>
+                    <p className="text-[11px] text-slate-400">
+                      Select an assistant to customise TAS connect for chat, training, or live demos.
+                    </p>
+                  </div>
+                  <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                    {suggestionItems.map((option) => {
+                      const isActive = normalizedCurrentAssistantId.length > 0 && option.id === normalizedCurrentAssistantId;
+                      const baseClasses =
+                        "flex h-full w-full flex-col items-start gap-2 rounded-2xl border px-4 py-3 text-left transition focus:outline-none focus-visible:ring-2 focus-visible:ring-sky-500/60";
+                      const stateClasses = isActive
+                        ? "border-sky-500/70 bg-slate-900 text-sky-200 shadow-[0_16px_32px_rgba(14,116,144,0.32)]"
+                        : "border-slate-800 bg-slate-950/70 text-slate-200 hover:border-sky-500/60 hover:text-sky-200 hover:shadow-[0_18px_36px_rgba(14,116,144,0.24)]";
+                      return (
+                        <button
+                          key={option.id}
+                          type="button"
+                          onClick={() => handleSuggestionClick(option)}
+                          className={`${baseClasses} ${stateClasses}`}
+                          aria-pressed={isActive}
+                        >
+                          <span className="text-sm font-semibold text-slate-100">{option.label}</span>
+                          {option.description ? (
+                            <span className="text-[11px] leading-snug text-slate-400">{option.description}</span>
+                          ) : null}
+                        </button>
+                      );
+                    })}
+                  </div>
+                  <p className="mt-4 text-[10px] uppercase tracking-[0.28em] text-slate-500">
+                    Switch anytime using slash commands.
+                  </p>
+                </div>
+              ) : (
+                <div className="rounded-3xl border border-dashed border-slate-800 bg-slate-950/70 px-5 py-6 text-center text-[11px] text-slate-400">
+                  Start by asking a question or switch modules to explore different stages of your flow.
+                </div>
+              )
             )}
 
             {/* sandbox iframe will be rendered after the last user message */}

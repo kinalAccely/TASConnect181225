@@ -1,6 +1,6 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useState } from "react";
 import { IoAdd, IoChevronBack, IoChevronForward, IoMoon, IoSunny } from "react-icons/io5";
-import { fetchgraphIdAccordingToCurrentModule, fetchThreads } from "../../services/threadService.js";
+import { fetchThreads } from "../../services/threadService.js";
 
 const resolveThreadId = (thread) => {
   if (!thread || typeof thread !== "object") {
@@ -29,8 +29,6 @@ const resolveThreadLabel = (thread) => {
 };
 
 export default function LeftSidebar({
-  activeTab,
-  chatHistory,
   isCollapsed,
   isLoading,
   theme = "light",
@@ -43,17 +41,16 @@ export default function LeftSidebar({
 }) {
   const [threads, setThreads] = useState([]);
   const [currentId, setCurrentId] = useState(null);
-  let normalizedSelectedId =
+  const normalizedSelectedId =
     selectedChatId !== undefined && selectedChatId !== null
       ? String(selectedChatId)
       : null;
-  let pathName = window.location.pathname;
 
   useEffect(() => {
     let isMounted = true;
     setCurrentId(window.location.pathname.split("/").pop());
     fetchThreads()
-      .then(async (data) => {
+      .then((data) => {
         if (!isMounted) {
           return;
         }
@@ -64,14 +61,7 @@ export default function LeftSidebar({
             ? data.threads
             : [];
 
-        let historyRecords = [];
-        let currentGraphId = await fetchgraphIdAccordingToCurrentModule();
-        for (let i = 0; i < normalized.length; i++) {
-          if (normalized[i].metadata.graph_id == currentGraphId) {
-            historyRecords.push(normalized[i]);
-          }
-        }
-        setThreads(historyRecords);
+        setThreads(normalized);
       })
       .catch((error) => {
         console.error("Failed to fetch threads for sidebar:", error);
@@ -82,14 +72,7 @@ export default function LeftSidebar({
     };
   }, [refreshKey]);
 
-  useEffect(() => {
-    normalizedSelectedId = selectedChatId;
-  }, [selectedChatId]);
-
-  const historyItems = useMemo(() => chatHistory?.[activeTab] ?? [], [chatHistory, activeTab]);
-  const showThreads = true;
-  const hasThreads = showThreads && threads.length > 0;
-  const itemsToRender = hasThreads ? threads : historyItems;
+  const hasThreads = threads.length > 0;
   const isDarkTheme = theme === "dark";
 
   const handleToggleTheme = () => {
@@ -140,14 +123,7 @@ export default function LeftSidebar({
     if (!targetId || !onNavigate) {
       return;
     }
-    if (pathName.startsWith("/chat")) {
-      pathName = "chat";
-    } else if(pathName.startsWith("/training")){
-      pathName = "training";
-    }else{
-      pathName = "livedemo";
-    }
-    onNavigate(`/${pathName}/${targetId}`);
+    onNavigate(`/chat/${targetId}`);
     setCurrentId(targetId);
   };
 
@@ -156,17 +132,7 @@ export default function LeftSidebar({
       onStartNewChat();
     }
     if (onNavigate) {
-      let currentPage = window.location.pathname;
-      if (pathName.startsWith("/chat")) {
-        pathName = "chat";
-      } else {
-        pathName = "training";
-      }
-      if (currentPage) {
-        onNavigate('/' + currentPage);
-        return;
-      }
-      onNavigate("/");
+      onNavigate("/chat");
     }
   };
 
@@ -214,14 +180,14 @@ export default function LeftSidebar({
           History
         </h2>
         <div className="mt-3 flex flex-1 flex-col gap-2 overflow-y-auto pr-1 text-sm">
-          {itemsToRender.length === 0 ? (
+          {!hasThreads ? (
             <p className="text-xs text-zinc-500/90">No conversations yet</p>
           ) : (
-            itemsToRender.map((item) => {
-              const rawId = hasThreads ? resolveThreadId(item) : item?.id;
+            threads.map((item) => {
+              const rawId = resolveThreadId(item);
               const normalizedId = rawId !== null && rawId !== undefined ? String(rawId) : null;
-              const key = normalizedId ?? (hasThreads ? resolveThreadLabel(item) : item?.title);
-              const label = hasThreads ? resolveThreadLabel(item) : `${item?.metadata?.thread_name ?? "Untitled"}...`;
+              const key = normalizedId ?? resolveThreadLabel(item);
+              const label = resolveThreadLabel(item);
               const isSelected =
                 normalizedSelectedId !== null && normalizedId === normalizedSelectedId;
               const isNavigable = Boolean(normalizedId);

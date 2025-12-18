@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useState } from "react";
 import { IoAdd, IoChevronBack, IoChevronForward, IoMoon, IoSunny } from "react-icons/io5";
 import { fetchThreads } from "../../services/threadService.js";
 
@@ -29,8 +29,6 @@ const resolveThreadLabel = (thread) => {
 };
 
 export default function LeftSidebar({
-  activeTab,
-  chatHistory,
   isCollapsed,
   isLoading,
   theme = "dark",
@@ -73,10 +71,7 @@ export default function LeftSidebar({
     };
   }, [refreshKey]);
 
-  const historyItems = useMemo(() => chatHistory?.[activeTab] ?? [], [chatHistory, activeTab]);
-  const showThreads = activeTab === "Chat";
-  const hasThreads = showThreads && threads.length > 0;
-  const itemsToRender = hasThreads ? threads : historyItems;
+  const hasThreads = threads.length > 0;
   const isDarkTheme = theme === "dark";
 
   const handleToggleTheme = () => {
@@ -136,7 +131,7 @@ export default function LeftSidebar({
       onStartNewChat();
     }
     if (onNavigate) {
-      onNavigate("/");
+      onNavigate("/chat");
     }
   };
 
@@ -182,14 +177,14 @@ export default function LeftSidebar({
           History
         </h2>
         <div className="mt-3 flex flex-1 flex-col gap-2 overflow-y-auto pr-1 text-sm">
-          {itemsToRender.length === 0 ? (
+          {!hasThreads ? (
             <p className="text-xs text-slate-500/80">No conversations yet</p>
           ) : (
-            itemsToRender.map((item) => {
-              const rawId = hasThreads ? resolveThreadId(item) : item?.id;
+            threads.map((item) => {
+              const rawId = resolveThreadId(item);
               const normalizedId = rawId !== null && rawId !== undefined ? String(rawId) : null;
-              const key = normalizedId ?? (hasThreads ? resolveThreadLabel(item) : item?.title);
-              const label = hasThreads ? resolveThreadLabel(item) : `${item?.metadata?.thread_name ?? "Untitled"}...`;
+              const key = normalizedId ?? resolveThreadLabel(item);
+              const label = resolveThreadLabel(item);
               const isSelected =
                 normalizedSelectedId !== null && normalizedId === normalizedSelectedId;
               const isNavigable = Boolean(normalizedId);

@@ -81,16 +81,6 @@ const extractThreadIds = (payload) => {
     .map((id) => String(id));
 };
 
-const baseRouteForPath = (path) => {
-  if (path.startsWith("/training")) {
-    return "/training";
-  }
-  if (path.startsWith("/livedemo")) {
-    return "/livedemo";
-  }
-  return "/chat";
-};
-
 /* ---------------------------------- App ----------------------------------- */
 
 export default function App() {
@@ -169,7 +159,6 @@ export default function App() {
   const match = matchRoutePath(currentPath);
   const RouteComponent = match?.route?.component ?? null;
   const chatId = match?.params?.chatId ?? null;
-  const initialTab = match?.route?.tab ?? "Chat";
 
   /**
    * Verify that a provided chatId exists on the server.
@@ -199,7 +188,7 @@ export default function App() {
         threadIdsRef.current = idsSet;
 
         if (!idsSet.has(normalizedChatId)) {
-          navigate(baseRouteForPath(currentPath));
+          navigate("/chat");
         }
       } catch (error) {
         console.error("Failed to validate thread id:", error);
@@ -219,7 +208,6 @@ export default function App() {
         {RouteComponent ? (
           <RouteComponent
             chatId={chatId}
-            initialTab={initialTab}
             onNavigate={navigate}
           />
         ) : null}

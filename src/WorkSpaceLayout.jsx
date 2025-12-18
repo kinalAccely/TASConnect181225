@@ -4,12 +4,9 @@ import ChatSection from "./components/ChatSection.jsx";
 import RightSidebar from "./components/RightSidebar.jsx";
 import TopHeader from "./components/TopHeader.jsx";
 import { useStream } from "@langchain/langgraph-sdk/react";
-import {
-  resolveAssistantId,
-  fetchgraphIdAccordingToCurrentModule,
-} from "./services/threadService.js";
+import { resolveAssistantId, fetchThreadById } from "./services/threadService.js";
 
-const LIVE_DEMO_STEPS = [
+const DEFAULT_TIMELINE_STEPS = [
   "Load interactive preview",
   "Demonstrate the core workflow",
   "Highlight captured insights",
@@ -18,9 +15,52 @@ const LIVE_DEMO_STEPS = [
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? "";
 const SANDBOX_HOST = import.meta.env.VITE_SANDBOX_HOST ?? undefined;
-let DEFAULT_ASSISTANT_ID = await fetchgraphIdAccordingToCurrentModule();
-const DEFAULT_STREAM_MODES = ["messages-tuple", "values", "modules", "metadata", "custom"];
-const TRAINING_STREAM_MODES = ["values", "modules", "metadata", "custom"];
+const DEFAULT_ASSISTANT_ID = resolveAssistantId();
+const ASSISTANT_SUGGESTIONS = [
+  {
+    id: DEFAULT_ASSISTANT_ID,
+    label: "Chat",
+    description: "Have a general conversation with the TAS assistant.",
+  },
+  {
+    id: resolveAssistantId("training_module_graph"),
+    label: "Training",
+    description: "Run through guided onboarding and training flows.",
+  },
+  {
+    id: resolveAssistantId("live_demo"),
+    label: "Live Demo",
+    description: "Launch the interactive demo workflow with sandbox access.",
+  },
+];
+
+const extractAssistantIdFromThread = (thread) => {
+  if (!thread || typeof thread !== "object") {
+    return undefined;
+  }
+
+  const candidates = [
+    thread.graph_id,
+    thread.graphId,
+    thread.assistant_id,
+    thread.assistantId,
+    thread?.metadata?.graph_id,
+    thread?.metadata?.assistant_id,
+    thread?.metadata?.assistantId,
+  ];
+
+  const match = candidates.find(
+    (value) => typeof value === "string" && value.trim().length > 0,
+  );
+
+  if (!match) {
+    return undefined;
+  }
+
+  return resolveAssistantId(match);
+};
+
+const UNIFIED_STREAM_MODES = ["messages-tuple", "values", "modules", "metadata", "custom"];
 const TEXTUAL_CONTENT_TYPES = new Set([
   "text",
   "output_text",
@@ -357,10 +397,11 @@ const resolveStageFromValues = (values) => {
   return { stage, stageProgress };
 };
 
-export default function workSpaceLayout({ onNavigate, chatId, initialTab = "Chat" }) {
+export default function workSpaceLayout({ onNavigate, chatId }) {
   const chatBodyRef = React.useRef(null);
 
-  const [activeTab, setActiveTab] = React.useState(initialTab);
+  const [assistantId, setAssistantId] = React.useState(DEFAULT_ASSISTANT_ID);
+  const [showAssistantChooser, setShowAssistantChooser] = React.useState(false);
   const [isLeftCollapsed, setIsLeftCollapsed] = React.useState(false);
   const [isRightCollapsed, setIsRightCollapsed] = React.useState(false);
   const [input, setInput] = React.useState("");
@@ -378,7 +419,7 @@ export default function workSpaceLayout({ onNavigate, chatId, initialTab = "Chat
     const stored = window.localStorage.getItem("tas-theme");
     return stored === "dark" ? "dark" : "light";
   });
-  const [liveDemoSteps, setLiveDemoSteps] = React.useState(LIVE_DEMO_STEPS);
+  const [timelineSteps, setTimelineSteps] = React.useState(DEFAULT_TIMELINE_STEPS);
   const [streamError, setStreamError] = React.useState(null);
   const seenToolIdsRef = React.useRef(new Set());
   const toolChunkAccumulatorRef = React.useRef(new Map());
@@ -389,21 +430,9 @@ export default function workSpaceLayout({ onNavigate, chatId, initialTab = "Chat
   const previousToolCountRef = React.useRef(0);
   const previousUserMessageCountRef = React.useRef(0);
   const transitionTimeoutRef = React.useRef(null);
+  const previousChatIdRef = React.useRef(chatId ?? null);
+  const lastThreadAssistantRef = React.useRef({ threadId: null, assistantId: null });
   const [isThreadTransitioning, setIsThreadTransitioning] = React.useState(false);
-  const resolvedAssistantId = React.useMemo(
-    async () => await fetchgraphIdAccordingToCurrentModule() ?? DEFAULT_ASSISTANT_ID,
-    [activeTab],
-  );
-  const [resolvedGraphId, setResolvedGraphId] = React.useState(
-    DEFAULT_ASSISTANT_ID,
-  );
-  const resolvedStreamModes = React.useMemo(
-    () =>
-      activeTab === "Training"
-        ? TRAINING_STREAM_MODES
-        : DEFAULT_STREAM_MODES,
-    [activeTab],
-  );
 
   const storeActiveRunMeta = React.useCallback(
     (runMeta) => {
@@ -466,38 +495,82 @@ export default function workSpaceLayout({ onNavigate, chatId, initialTab = "Chat
   );
 
   React.useEffect(() => {
-    if (activeTab !== "Live Demo") {
-      setLiveDemoSteps(LIVE_DEMO_STEPS);
-    }
-  }, [activeTab]);
+    setTimelineSteps(DEFAULT_TIMELINE_STEPS);
+  }, [chatId]);
+
+  const assistantSuggestions = React.useMemo(() => ASSISTANT_SUGGESTIONS, []);
 
   React.useEffect(() => {
-    let isMounted = true;
+    const normalizedChatId = chatId ?? null;
+    if (previousChatIdRef.current !== normalizedChatId) {
+      previousChatIdRef.current = normalizedChatId;
+      if (normalizedChatId) {
+        setShowAssistantChooser(false);
+      }
+    }
+  }, [chatId]);
 
-    const updateGraphId = async () => {
+  React.useEffect(() => {
+    if (!chatId) {
+      lastThreadAssistantRef.current = { threadId: null, assistantId: null };
+      return;
+    }
+
+    const normalizedChatId = String(chatId);
+
+    if (lastThreadAssistantRef.current.threadId === normalizedChatId) {
+      const storedAssistantId = lastThreadAssistantRef.current.assistantId;
+      if (storedAssistantId && storedAssistantId !== assistantId) {
+        setAssistantId(storedAssistantId);
+      }
+      if (showAssistantChooser) {
+        setShowAssistantChooser(false);
+      }
+      return;
+    }
+
+    let isActive = true;
+
+    const loadThreadAssistant = async () => {
       try {
-        const graphId =
-          (await fetchgraphIdAccordingToCurrentModule()) ??
-          DEFAULT_ASSISTANT_ID;
-        
-        DEFAULT_ASSISTANT_ID = graphId;
-        if (isMounted) {
-          setResolvedGraphId(graphId);
+        const thread = await fetchThreadById(normalizedChatId);
+        if (!isActive) {
+          return;
         }
-      } catch (graphError) {
-        console.warn("Unable to resolve graph id:", graphError);
-        if (isMounted) {
-          setResolvedGraphId(DEFAULT_ASSISTANT_ID);
+        const threadAssistantId = extractAssistantIdFromThread(thread);
+        lastThreadAssistantRef.current = {
+          threadId: normalizedChatId,
+          assistantId: threadAssistantId ?? null,
+        };
+        if (threadAssistantId && threadAssistantId !== assistantId) {
+          setAssistantId(threadAssistantId);
+        }
+        if (threadAssistantId && showAssistantChooser) {
+          setShowAssistantChooser(false);
+        }
+      } catch (error) {
+        console.warn("Unable to resolve assistant for thread:", error);
+        if (isActive) {
+          lastThreadAssistantRef.current = {
+            threadId: normalizedChatId,
+            assistantId: null,
+          };
         }
       }
     };
 
-    updateGraphId();
+    loadThreadAssistant();
 
     return () => {
-      isMounted = false;
+      isActive = false;
     };
-  }, [activeTab, chatId]);
+  }, [chatId, assistantId, showAssistantChooser]);
+
+  React.useEffect(() => {
+    if (activeThreadId) {
+      setShowAssistantChooser(false);
+    }
+  }, [activeThreadId]);
 
   const resetToolTracking = React.useCallback(() => {
     setToolOutputs([]);
@@ -517,12 +590,6 @@ export default function workSpaceLayout({ onNavigate, chatId, initialTab = "Chat
       transitionTimeoutRef.current = null;
     }, 280);
   }, []);
-
-  React.useEffect(() => {
-    if (initialTab && initialTab !== activeTab) {
-      setActiveTab(initialTab);
-    }
-  }, [initialTab, activeTab]);
 
   React.useEffect(() => {
     activeThreadIdRef.current = activeThreadId;
@@ -547,17 +614,11 @@ export default function workSpaceLayout({ onNavigate, chatId, initialTab = "Chat
       }
       setActiveThreadId(threadId);
       setRefreshKey((prev) => prev + 1);
-      if (typeof onNavigate === "function") {
-        if (activeTab === "Chat") {
-          onNavigate(`/chat/${threadId}`);
-        } else if (activeTab === "Training") {
-          onNavigate(`/training/${threadId}`);
-        } else if (activeTab === "Live Demo") {
-          onNavigate(`/livedemo/${threadId}`);
-        }
+      if (typeof onNavigate === "function" && threadId) {
+        onNavigate(`/chat/${threadId}`);
       }
     },
-    [onNavigate, activeTab, activeThreadId, triggerThreadTransition],
+    [onNavigate, activeThreadId, triggerThreadTransition],
   );
 
   const upsertEntries = React.useCallback((setter) => {
@@ -701,11 +762,11 @@ export default function workSpaceLayout({ onNavigate, chatId, initialTab = "Chat
     stop,
     values: streamValues,
   } = useStream({
-    assistantId: DEFAULT_ASSISTANT_ID,
-    graphId: resolvedGraphId,
+    assistantId,
+    graphId: assistantId,
     apiUrl: API_BASE_URL || undefined,
     threadId: activeThreadId,
-    streamMode: resolvedStreamModes,
+    streamMode: UNIFIED_STREAM_MODES,
     onThreadId: handleThreadId,
     fetchStateHistory: true,
     reconnectOnMount: false,
@@ -837,7 +898,7 @@ export default function workSpaceLayout({ onNavigate, chatId, initialTab = "Chat
             streamValues?.liveDemo?.container_id ??
             undefined;
 
-          if (containerId && activeTab === "Live Demo") {
+          if (containerId) {
             const cleanupBody = { container_id: String(containerId) };
             const cleanupUrl = normalizedBaseUrl
               ? `${normalizedBaseUrl}/cleanup`
@@ -942,18 +1003,10 @@ export default function workSpaceLayout({ onNavigate, chatId, initialTab = "Chat
     }
   }, [streamValues]);
 
-  const activeTabMessages = React.useMemo(() => {
-    if (activeTab === "Chat" || activeTab === "Training" || activeTab === "Live Demo") {
-      return streamMessages;
-    }
-    return [];
-  }, [activeTab, streamMessages]);
-
   const baseMessages = React.useMemo(
-    () => mapMessagesForDisplay(activeTabMessages, isLoading),
-    [activeTabMessages, isLoading],
+    () => mapMessagesForDisplay(streamMessages, isLoading),
+    [streamMessages, isLoading],
   );
-  console.log(streamValues , baseMessages);
   React.useEffect(() => {
     const userCount = baseMessages.reduce(
       (count, message) => (message?.role === "user" ? count + 1 : count),
@@ -972,11 +1025,15 @@ export default function workSpaceLayout({ onNavigate, chatId, initialTab = "Chat
     setPendingMessages((prev) => (prev.length === 0 ? prev : []));
   }, [activeThreadId]);
 
-  const messagesWithModules = React.useMemo(() => {
+  const messagesWithCanvas = React.useMemo(() => {
     const baseMessagesCopy = [...baseMessages];
     const modulePayload =
       streamValues && typeof streamValues === "object"
-        ? streamValues.module ?? streamValues.modules ?? undefined
+        ? streamValues.canvas ??
+          streamValues.canvas_data ??
+          streamValues.module ??
+          streamValues.modules ??
+          undefined
         : undefined;
 
     if (!modulePayload) {
@@ -1003,8 +1060,8 @@ export default function workSpaceLayout({ onNavigate, chatId, initialTab = "Chat
 
     const alreadyPresent = baseMessagesCopy.some(
       (msg) =>
-        msg?.__source === "values-module" ||
-        (msg?.raw?.module && msg.text === moduleText),
+        msg?.__source === "canvas-payload" ||
+        (msg?.raw?.canvas && msg.text === moduleText),
     );
 
     if (alreadyPresent) {
@@ -1014,23 +1071,29 @@ export default function workSpaceLayout({ onNavigate, chatId, initialTab = "Chat
     return [
       ...baseMessagesCopy,
       {
-        id: "values-module",
+        id: "canvas-payload",
         role: "assistant",
         text: moduleText,
-        type: "module",
-        raw: { module: modulePayload, generate_module: true },
+        type: "canvas",
+        raw: { canvas: modulePayload },
         generate_module: true,
-        __source: "values-module",
+        __source: "canvas-payload",
       },
     ];
   }, [baseMessages, streamValues]);
 
   const normalizedMessages = React.useMemo(() => {
     if (pendingMessages.length === 0) {
-      return messagesWithModules;
+      return messagesWithCanvas;
     }
-    return [...messagesWithModules, ...pendingMessages];
-  }, [messagesWithModules, pendingMessages]);
+    return [...messagesWithCanvas, ...pendingMessages];
+  }, [messagesWithCanvas, pendingMessages]);
+
+  const shouldShowAssistantSuggestions =
+    showAssistantChooser &&
+    !activeThreadId &&
+    normalizedMessages.length === 0 &&
+    !isLoading;
 
   const sandboxUrl = React.useMemo(() => {
     if (!streamValues || typeof streamValues !== "object") {
@@ -1087,53 +1150,30 @@ export default function workSpaceLayout({ onNavigate, chatId, initialTab = "Chat
     }
   }, [streamValues]);
 
-  const shouldRenderAiInSidebar =
-    activeTab === "Live Demo" &&
-    typeof sandboxUrl === "string" &&
-    sandboxUrl.length > 0;
-
-  const liveDemoSidebarMessages = React.useMemo(() => {
-    if (!shouldRenderAiInSidebar) {
-      return [];
-    }
-    return normalizedMessages.filter((message) => {
-      if (!message) {
-        return false;
-      }
-      const role =
-        typeof message.role === "string"
-          ? message.role.toLowerCase()
-          : typeof message.type === "string"
-            ? message.type.toLowerCase()
-            : "assistant";
-      return role === "assistant" || role === "ai";
-    });
-  }, [normalizedMessages, shouldRenderAiInSidebar]);
-
-  const chatMessagesForDisplay = React.useMemo(() => {
-    if (!shouldRenderAiInSidebar) {
-      return normalizedMessages;
-    }
-    return normalizedMessages.filter((message) => {
-      if (!message) {
-        return false;
-      }
-      const role =
-        typeof message.role === "string"
-          ? message.role.toLowerCase()
-          : typeof message.type === "string"
-            ? message.type.toLowerCase()
-            : "assistant";
-      if (role === "assistant" || role === "ai") {
-        return false;
-      }
-      return true;
-    });
-  }, [normalizedMessages, shouldRenderAiInSidebar]);
-
   const { stage, stageProgress } = React.useMemo(
     () => resolveStageFromValues(streamValues),
     [streamValues],
+  );
+
+  const handleInputChange = React.useCallback(
+    (value) => {
+      setInput(value);
+
+      if (activeThreadId) {
+        setShowAssistantChooser(false);
+        return;
+      }
+
+      const normalized = typeof value === "string" ? value.trimStart() : "";
+      if (normalized.startsWith("/") && normalized.length > 0) {
+        setShowAssistantChooser(true);
+      } else if (!normalized) {
+        setShowAssistantChooser(false);
+      } else {
+        setShowAssistantChooser(false);
+      }
+    },
+    [activeThreadId],
   );
 
   React.useEffect(() => {
@@ -1150,21 +1190,24 @@ export default function workSpaceLayout({ onNavigate, chatId, initialTab = "Chat
     }
     triggerThreadTransition();
     setActiveThreadId(null);
-    setInput("");
+    handleInputChange("");
     setSources([]);
     setRefreshKey((prev) => prev + 1);
     resetToolTracking();
     setStreamError(null);
+    setShowAssistantChooser(false);
+    lastThreadAssistantRef.current = { threadId: null, assistantId: null };
     if (typeof onNavigate === "function") {
-      const basePath =
-        activeTab === "Training"
-          ? "/training"
-          : activeTab === "Live Demo"
-            ? "/livedemo"
-            : "/chat";
-      onNavigate(basePath);
+      onNavigate("/chat");
     }
-  }, [activeTab, isLoading, stop, resetToolTracking, onNavigate, triggerThreadTransition]);
+  }, [
+    isLoading,
+    stop,
+    resetToolTracking,
+    onNavigate,
+    triggerThreadTransition,
+    handleInputChange,
+  ]);
 
   React.useEffect(() => {
     if (
@@ -1212,6 +1255,77 @@ export default function workSpaceLayout({ onNavigate, chatId, initialTab = "Chat
       clearTimeout(transitionTimeoutRef.current);
     }
   }, []);
+
+  const applyAssistantSelection = React.useCallback(
+    (nextAssistantId, announcementText) => {
+      if (!nextAssistantId || nextAssistantId === assistantId) {
+        return;
+      }
+
+      const normalizedAnnouncement =
+        typeof announcementText === "string" && announcementText.trim().length > 0
+          ? announcementText.trim()
+          : `Assistant set to ${nextAssistantId}`;
+
+      setAssistantId(nextAssistantId);
+      resetToolTracking();
+      const targetThreadId =
+        typeof activeThreadId === "string" && activeThreadId.trim().length > 0
+          ? activeThreadId.trim()
+          : typeof chatId === "string" && chatId.trim().length > 0
+            ? chatId.trim()
+            : null;
+      if (targetThreadId) {
+        lastThreadAssistantRef.current = {
+          threadId: targetThreadId,
+          assistantId: nextAssistantId,
+        };
+      }
+      setPendingMessages((prev) => [
+        ...prev,
+        {
+          id: `assistant-switch-${Date.now()}`,
+          role: "system",
+          text: normalizedAnnouncement,
+          type: "system",
+          raw: { role: "system", content: normalizedAnnouncement },
+        },
+      ]);
+      setStreamError(null);
+    },
+    [assistantId, resetToolTracking, activeThreadId, chatId],
+  );
+
+  const handleAssistantSuggestionSelect = React.useCallback(
+    (option) => {
+      if (!option) {
+        return;
+      }
+
+      const candidate =
+        typeof option === "string"
+          ? option
+          : typeof option?.id === "string"
+            ? option.id
+            : typeof option?.value === "string"
+              ? option.value
+              : "";
+      const nextAssistantId = resolveAssistantId(candidate);
+      if (!nextAssistantId) {
+        return;
+      }
+
+      const announcement =
+        typeof option?.label === "string" && option.label.trim().length > 0
+          ? `Assistant set to ${option.label.trim()}`
+          : undefined;
+
+      applyAssistantSelection(nextAssistantId, announcement);
+      handleInputChange("");
+      setShowAssistantChooser(false);
+    },
+    [applyAssistantSelection, handleInputChange],
+  );
 
   React.useEffect(() => {
     if (!Array.isArray(streamMessages) || streamMessages.length === 0) {
@@ -1332,7 +1446,29 @@ export default function workSpaceLayout({ onNavigate, chatId, initialTab = "Chat
 
   const handleSend = React.useCallback(async () => {
     const trimmed = input.trim();
-    if (!trimmed || isLoading || !resolvedAssistantId) {
+    if (!trimmed || isLoading) {
+      return;
+    }
+
+    if (trimmed.startsWith("/")) {
+      const slashMatch = trimmed.match(/^\/\s*([^\s]+)?/);
+      const commandKey = slashMatch?.[1];
+      if (!commandKey) {
+        setShowAssistantChooser(true);
+        setStreamError(null);
+        return;
+      }
+      const nextAssistantId = resolveAssistantId(`/${commandKey}`);
+      if (nextAssistantId) {
+        applyAssistantSelection(nextAssistantId);
+        setShowAssistantChooser(false);
+      }
+      handleInputChange("");
+      setStreamError(null);
+      return;
+    }
+
+    if (!assistantId) {
       return;
     }
 
@@ -1347,7 +1483,7 @@ export default function workSpaceLayout({ onNavigate, chatId, initialTab = "Chat
       isPending: true,
     };
 
-    setInput("");
+    handleInputChange("");
     setSources([]);
     setToolOutputs([]);
     setPendingMessages((prev) => [...prev, pendingMessage]);
@@ -1365,8 +1501,8 @@ export default function workSpaceLayout({ onNavigate, chatId, initialTab = "Chat
         {
           metadata: isExistingThread
             ? undefined
-            : { thread_name: trimmed, graph_id: resolvedGraphId },
-          streamMode: resolvedStreamModes,
+            : { thread_name: trimmed, assistant_id: assistantId, graph_id: assistantId },
+          streamMode: UNIFIED_STREAM_MODES,
           streamResumable: true,
           streamSubgraphs: true,
           threadId: activeThreadId ?? undefined,
@@ -1380,18 +1516,9 @@ export default function workSpaceLayout({ onNavigate, chatId, initialTab = "Chat
       setPendingMessages((prev) =>
         prev.filter((message) => message.id !== clientMessageId),
       );
-      setInput(trimmed);
+      handleInputChange(trimmed);
     }
-  }, [
-    input,
-    isLoading,
-    submit,
-    activeThreadId,
-    resolvedAssistantId,
-    resolvedGraphId,
-    resolvedStreamModes,
-    setPendingMessages,
-  ]);
+  }, [input, isLoading, submit, activeThreadId, assistantId, applyAssistantSelection, handleInputChange]);
 
   const handleCopy = React.useCallback((idx) => {
     const node = document.getElementById(`canvas_${idx}`);
@@ -1445,51 +1572,19 @@ export default function workSpaceLayout({ onNavigate, chatId, initialTab = "Chat
   );
 
   const selectedChatId = activeThreadId;
-  const handleTabNavigate = React.useCallback(
-    (nextTab) => {
-      const currentPath = window.location.pathname ?? "/chat";
-      const [, segment = "chat"] = currentPath.split("/");
-      if (typeof onNavigate !== "function") {
-        return;
-      }
-      if (["Training"].includes(nextTab)) {
-        setRefreshKey((prev) => prev + 1);
-        onNavigate("/training");
-        return;
-      }
-      if (nextTab === "Live Demo") {
-        setRefreshKey((prev) => prev + 1);
-        onNavigate("/livedemo");
-        return;
-      }
-      // if (selectedChatId) {
-      //   setRefreshKey((prev) => prev + 1);
-      //   onNavigate(`/${segment}/${selectedChatId}`);
-      //   return;
-      // }
-      onNavigate("/chat");
-      setRefreshKey((prev) => prev + 1);
-    },
-    [onNavigate, selectedChatId],
-  );
 
   return (
     <div className={containerClassName}>
       <div className="flex h-full w-full min-h-0 max-w-8xl flex-col gap-4">
         <TopHeader
-          activeTab={activeTab}
-          setActiveTab={setActiveTab}
+          assistantId={assistantId}
           isLoading={isLoading}
-          setInput={setInput}
-          onResetToolOutputs={resetToolTracking}
-          setActiveThreadId={setActiveThreadId}
-          onTabNavigate={handleTabNavigate}
+          onNewChat={startNewChat}
           theme={theme}
         />
 
         <div className="flex min-h-0 flex-1 gap-3 overflow-hidden">
           <LeftSidebar
-            activeTab={activeTab}
             theme={theme}
             isCollapsed={isLeftCollapsed}
             isLoading={isLoading}
@@ -1502,34 +1597,36 @@ export default function workSpaceLayout({ onNavigate, chatId, initialTab = "Chat
           />
 
           <ChatSection
-            activeTab={activeTab}
             theme={theme}
             chatBodyRef={chatBodyRef}
             input={input}
             isLoading={isLoading}
-            messages={chatMessagesForDisplay}
+            messages={normalizedMessages}
             sandboxUrl={overrideSandboxUrl ?? sandboxUrl}
             onCopy={handleCopy}
             onDownload={handleDownload}
-            onInputChange={setInput}
+            onInputChange={handleInputChange}
             onSend={handleSend}
             onStop={handleStop}
-            onLiveDemoStepsChange={setLiveDemoSteps}
+            onTimelineStepsChange={setTimelineSteps}
             stage={stage}
             stageProgress={stageProgress ?? 0}
             isTransitioning={isThreadTransitioning}
+            assistantSuggestions={assistantSuggestions}
+            currentAssistantId={assistantId}
+            onAssistantSuggestionSelect={handleAssistantSuggestionSelect}
+            shouldShowAssistantSuggestions={shouldShowAssistantSuggestions}
           />
 
           <RightSidebar
             isCollapsed={isRightCollapsed}
             theme={theme}
-            liveDemoSteps={liveDemoSteps}
+            timelineSteps={timelineSteps}
+            isThinking={isLoading}
             onToggleCollapse={toggleRightCollapse}
-            showDemoSteps={activeTab === "Live Demo"}
             toolOutputs={toolOutputs}
             sources={sources}
             isTransitioning={isThreadTransitioning}
-            liveDemoMessages={liveDemoSidebarMessages}
           />
         </div>
       </div>

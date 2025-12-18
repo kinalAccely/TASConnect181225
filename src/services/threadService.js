@@ -1,8 +1,5 @@
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL;
 const DEFAULT_ASSISTANT_ID = import.meta.env.VITE_ASSISTANT_ID ?? "agent";
-const TRAINING_ASSISTANT_ID = import.meta.env.VITE_TRAINING_ASSISTANT_ID ?? "training_module_graph";
-const DEFAULT_STREAM_MODE = ["messages-tuple", "values", "modules", "metadata", "custom"];
-const TRAINING_STREAM_MODE = ["values", "modules", "metadata", "custom"];
 
 const normalizeBaseUrl = (url) => {
   if (!url) {
@@ -11,16 +8,19 @@ const normalizeBaseUrl = (url) => {
   return url.endsWith("/") ? url.slice(0, -1) : url;
 };
 
-export const resolveAssistantId = (moduleKey, overrideId) => {
-  if (typeof overrideId === "string" && overrideId.trim().length > 0) {
-    return overrideId.trim();
-  }
+export const resolveAssistantId = (value) =>
+  typeof value === "string" && value.trim().length > 0
+    ? value.trim()
+    : DEFAULT_ASSISTANT_ID;
 
-  if (typeof moduleKey === "string" && moduleKey.toLowerCase() === "training") {
-    return TRAINING_ASSISTANT_ID;
+const extractThreadsArray = (payload) => {
+  if (Array.isArray(payload)) {
+    return payload;
   }
-
-  return DEFAULT_ASSISTANT_ID;
+  if (payload && Array.isArray(payload.threads)) {
+    return payload.threads;
+  }
+  return [];
 };
 
 export async function fetchThreads() {
@@ -39,20 +39,33 @@ export async function fetchThreads() {
   return threads;
 }
 
-const graphObject = {
-  training: TRAINING_ASSISTANT_ID,
-  livedemo: "live_demo",
-  chat: DEFAULT_ASSISTANT_ID,
-};
-
-export async function fetchgraphIdAccordingToCurrentModule() {
-  if (typeof window === "undefined") {
-    return graphObject.chat;
+export async function fetchThreadById(threadId) {
+  if (!threadId) {
+    return null;
   }
 
-  const currentPath = window.location.pathname ?? "/chat";
-  const [, segment = "chat"] = currentPath.split("/");
-  const normalized = typeof segment === "string" ? segment.toLowerCase() : "chat";
-  console.log(normalized);
-  return graphObject[normalized] ?? graphObject.chat;
+  try {
+    const allThreads = await fetchThreads();
+    const list = extractThreadsArray(allThreads);
+    const normalizedId = String(threadId);
+    const match = list.find((thread) => {
+      if (!thread || typeof thread !== "object") {
+        return false;
+      }
+      const candidates = [
+        thread.id,
+        thread.thread_id,
+        thread.threadId,
+        thread?.metadata?.thread_id,
+        thread?.metadata?.id,
+      ]
+        .filter((value) => value !== undefined && value !== null)
+        .map((value) => String(value));
+      return candidates.includes(normalizedId);
+    });
+    return match ?? null;
+  } catch (error) {
+    console.warn("Failed to fetch thread by id:", error);
+    return null;
+  }
 }

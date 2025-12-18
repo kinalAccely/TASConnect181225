@@ -27,28 +27,7 @@ const TEXTUAL_CONTENT_TYPES = new Set([
 //   "Summarising next steps",
 // ];
 
-const DEFAULT_LIVE_DEMO_STEPS=[];
-
-const TODO_STATUS_META = {
-  pending: {
-    circleClass:
-      "border-zinc-300 bg-white text-zinc-400 shadow-sm",
-    connectorClass: "bg-zinc-200",
-    labelClass: "text-zinc-500",
-  },
-  in_progress: {
-    circleClass:
-      "border-[var(--brand)] bg-[var(--brand-lighter)] text-[var(--brand-dark)] shadow-[0_6px_16px_rgba(242,60,57,0.18)]",
-    connectorClass: "bg-[var(--brand-light)]",
-    labelClass: "text-[var(--brand-dark)]",
-  },
-  completed: {
-    circleClass:
-      "border-emerald-500 bg-emerald-500 text-white shadow-[0_6px_16px_rgba(16,185,129,0.25)]",
-    connectorClass: "bg-emerald-400",
-    labelClass: "text-emerald-600",
-  },
-};
+const DEFAULT_TIMELINE_STEPS = [];
 
 const resolveRole = (message) => {
   if (!message) {
@@ -309,9 +288,7 @@ const resolveMessageText = (message) => {
 };
 
 export default function ChatSection({
-  activeTab,
   chatBodyRef,
-  copyClicked,
   input,
   isLoading,
   messages,
@@ -324,16 +301,84 @@ export default function ChatSection({
   onInputChange,
   onSend,
   onStop,
-  onLiveDemoStepsChange,
+  onTimelineStepsChange,
+  assistantSuggestions = [],
+  currentAssistantId,
+  onAssistantSuggestionSelect,
+  shouldShowAssistantSuggestions = false,
   isTransitioning = false,
-  liveDemoTodos = [],
 }) {
   const [stageHistory, setStageHistory] = React.useState([]);
   const prevStageRef = React.useRef();
   const [isAtBottom, setIsAtBottom] = React.useState(true);
   const [copiedMessageKey, setCopiedMessageKey] = React.useState(null);
   const copyTimeoutRef = React.useRef();
-  const isLiveDemo = activeTab === "Live Demo";
+  const suggestionItems = React.useMemo(() => {
+    if (!Array.isArray(assistantSuggestions) || assistantSuggestions.length === 0) {
+      return [];
+    }
+    const seenIds = new Set();
+    return assistantSuggestions
+      .map((option) => {
+        if (!option) {
+          return null;
+        }
+        if (typeof option === "string") {
+          const normalizedId = option.trim();
+          if (!normalizedId || seenIds.has(normalizedId)) {
+            return null;
+          }
+          seenIds.add(normalizedId);
+          return {
+            id: normalizedId,
+            label: normalizedId,
+            description: "",
+          };
+        }
+        const rawId =
+          typeof option.id === "string"
+            ? option.id
+            : typeof option.value === "string"
+              ? option.value
+              : "";
+        const normalizedId = rawId.trim();
+        if (!normalizedId || seenIds.has(normalizedId)) {
+          return null;
+        }
+        seenIds.add(normalizedId);
+        const label =
+          typeof option.label === "string" && option.label.trim().length > 0
+            ? option.label.trim()
+            : typeof option.title === "string" && option.title.trim().length > 0
+              ? option.title.trim()
+              : normalizedId;
+        const description =
+          typeof option.description === "string" && option.description.trim().length > 0
+            ? option.description.trim()
+            : typeof option.subtitle === "string" && option.subtitle.trim().length > 0
+              ? option.subtitle.trim()
+              : "";
+        return {
+          ...option,
+          id: normalizedId,
+          label,
+          description,
+        };
+      })
+      .filter(Boolean);
+  }, [assistantSuggestions]);
+  const normalizedCurrentAssistantId =
+    typeof currentAssistantId === "string" ? currentAssistantId.trim() : "";
+  const hasAssistantSuggestions =
+    shouldShowAssistantSuggestions && suggestionItems.length > 0;
+  const handleSuggestionClick = React.useCallback(
+    (option) => {
+      if (typeof onAssistantSuggestionSelect === "function") {
+        onAssistantSuggestionSelect(option);
+      }
+    },
+    [onAssistantSuggestionSelect],
+  );
   const normalizedSandboxUrl = React.useMemo(() => {
     if (typeof sandboxUrl !== "string") {
       return undefined;
@@ -367,7 +412,7 @@ export default function ChatSection({
   const isVideoPreview = Boolean(
     typeof normalizedSandboxUrl === "string" && /\.(mp4|webm|ogg|mov|m3u8|mkv)(\?.*)?$/i.test(normalizedSandboxUrl),
   );
-  const hasSandboxPreview = isLiveDemo && Boolean(normalizedSandboxUrl);
+  const hasSandboxPreview = Boolean(normalizedSandboxUrl);
 
   const markdownComponents = React.useMemo(
     () => ({
@@ -523,120 +568,44 @@ export default function ChatSection({
   }, [stageProgress, stageHistory.length]);
 
   const displayedMessages = React.useMemo(() => {
-    const baseMessages = Array.isArray(messages)
-      ? messages
-          .map((msg) => {
-            if (!msg) {
-              return null;
-            }
-            const role = resolveRole(msg);
-            const msgType = msg.type ?? msg.role;
-            const text = resolveMessageText(msg);
-            if (msgType === "tool" || msgType === "tool_calls") {
-              return null;
-            }
-            if (
-              text.trim().toLowerCase() === "tool_calls" ||
-              (role !== "user" && !text.trim())
-            ) {
-              return null;
-            }
-            return { ...msg, role, text };
-          })
-          .filter(Boolean)
-      : [];
-
-    if (isLiveDemo && hasSandboxPreview) {
-      return baseMessages.filter((msg) => msg.role === "user");
-    }
-
-    return baseMessages;
-  }, [messages, isLiveDemo, hasSandboxPreview]);
-
-   const liveDemoTodoSteps = React.useMemo(() => {
-    if (!isLiveDemo || !Array.isArray(liveDemoTodos)) {
+    if (!Array.isArray(messages)) {
       return [];
     }
-    return liveDemoTodos
-      .map((todo, index) => {
-        if (!todo || typeof todo !== "object") {
+    return messages
+      .map((msg) => {
+        if (!msg) {
           return null;
         }
-        const content =
-          typeof todo.content === "string" ? todo.content.trim() : "";
-        if (!content) {
+        const role = resolveRole(msg);
+        const msgType = msg.type ?? msg.role;
+        const text = resolveMessageText(msg);
+        if (msgType === "tool" || msgType === "tool_calls") {
           return null;
         }
-        const rawStatus =
-          typeof todo.status === "string"
-            ? todo.status.trim().toLowerCase()
-            : "";
-        const status =
-          rawStatus === "in_progress" || rawStatus === "in-progress"
-            ? "in_progress"
-            : ["complete", "completed", "done", "finished"].includes(rawStatus)
-              ? "completed"
-              : "pending";
-        return {
-          key:
-            typeof todo.id === "string" || typeof todo.id === "number"
-              ? `todo-${todo.id}`
-              : `todo-${index}`,
-          content,
-          status,
-        };
+        if (
+          text.trim().toLowerCase() === "tool_calls" ||
+          (role !== "user" && !text.trim())
+        ) {
+          return null;
+        }
+        return { ...msg, role, text };
       })
       .filter(Boolean);
-  }, [isLiveDemo, liveDemoTodos]);
+  }, [messages]);
 
-  const lastUserMessageIndex = React.useMemo(() => {
-    if (!isLiveDemo || liveDemoTodoSteps.length === 0) {
-      return -1;
-    }
-    for (let index = displayedMessages.length - 1; index >= 0; index -= 1) {
-      if (displayedMessages[index]?.role === "user") {
-        return index;
-      }
-    }
-    return -1;
-  }, [displayedMessages, isLiveDemo, liveDemoTodoSteps.length]);
-
-  const latestDemoMessage = React.useMemo(() => {
-    if (!isLiveDemo) {
-      return undefined;
-    }
-    const candidates = Array.isArray(displayedMessages)
-      ? [...displayedMessages].reverse()
-      : [];
-    return candidates.find(
-      (msg) =>
-        msg?.metadata?.demo_video_url ||
-        msg?.raw?.metadata?.demo_video_url,
-    );
-  }, [displayedMessages, isLiveDemo]);
-
-  const liveDemoVideoUrl =
-    latestDemoMessage?.metadata?.demo_video_url ??
-    latestDemoMessage?.raw?.metadata?.demo_video_url ??
-    "https://videos.pexels.com/video-files/6536658/6536658-uhd_2560_1440_25fps.mp4";
-
-  const liveDemoSteps = React.useMemo(() => {
+  const timelineSteps = React.useMemo(() => {
     if (stageHistory.length > 0) {
       return stageHistory;
     }
-    return DEFAULT_LIVE_DEMO_STEPS;
+    return DEFAULT_TIMELINE_STEPS;
   }, [stageHistory]);
 
   React.useEffect(() => {
-    if (typeof onLiveDemoStepsChange !== "function") {
+    if (typeof onTimelineStepsChange !== "function") {
       return;
     }
-    if (isLiveDemo) {
-      onLiveDemoStepsChange(liveDemoSteps);
-    } else {
-      onLiveDemoStepsChange([]);
-    }
-  }, [isLiveDemo, liveDemoSteps, onLiveDemoStepsChange]);
+    onTimelineStepsChange(timelineSteps);
+  }, [timelineSteps, onTimelineStepsChange]);
 
   React.useEffect(() => {
     const container = chatBodyRef?.current;
@@ -683,31 +652,57 @@ export default function ChatSection({
           ref={chatBodyRef}
           className={`flex-1 space-y-2 overflow-y-auto px-4 py-4 text-[11px] text-zinc-500 transition-all duration-300 ease-out ${isTransitioning ? "opacity-60 blur-[0.3px]" : "opacity-100"} min-h-0`}
         >
-          {false ? (
-            <div className="relative min-h-[22rem] overflow-hidden rounded-3xl border border-zinc-200 bg-black shadow-[0_18px_40px_rgba(17,17,17,0.16)]">
-              <video
-                key={liveDemoVideoUrl}
-                src={liveDemoVideoUrl}
-                autoPlay
-                loop
-                muted
-                controls
-                className="h-full w-full object-cover"
-              />
-              <div className="absolute bottom-4 left-4 right-4 flex items-center justify-between rounded-2xl bg-black/60 px-4 py-3 text-[12px] text-white backdrop-blur">
-                <span className="font-semibold uppercase tracking-[0.24em]">Live Demo</span>
-                <span className="text-[11px] font-medium text-lime-300">Running</span>
-              </div>
-            </div>
-          ) : (
-            <>
-              {displayedMessages.length === 0 && (
+          <>
+            {displayedMessages.length === 0 && (
+              hasAssistantSuggestions ? (
+                <div className="rounded-3xl border border-zinc-200 bg-white/95 px-6 py-6 text-left shadow-[0_18px_36px_rgba(15,23,42,0.08)]">
+                  <div className="flex flex-col gap-2">
+                    <span className="text-[10px] font-semibold uppercase tracking-[0.32em] text-zinc-400">
+                      Choose a starting point
+                    </span>
+                    <h2 className="text-base font-semibold text-zinc-800">
+                      What would you like to do?
+                    </h2>
+                    <p className="text-[11px] text-zinc-500">
+                      Pick an assistant to tailor the workspace for chat, training, or guided live demos.
+                    </p>
+                  </div>
+                  <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                    {suggestionItems.map((option) => {
+                      const isActive = normalizedCurrentAssistantId.length > 0 && option.id === normalizedCurrentAssistantId;
+                      const baseClasses =
+                        "flex h-full w-full flex-col items-start gap-2 rounded-2xl border px-4 py-3 text-left transition focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--brand-light)]";
+                      const stateClasses = isActive
+                        ? "border-[var(--brand)] bg-[var(--brand-lighter)]/70 text-[var(--brand-dark)] shadow-[0_14px_28px_rgba(242,60,57,0.18)]"
+                        : "border-zinc-200 bg-white text-zinc-600 hover:border-[var(--brand-light)] hover:shadow-[0_18px_32px_rgba(242,60,57,0.12)]";
+                      return (
+                        <button
+                          key={option.id}
+                          type="button"
+                          onClick={() => handleSuggestionClick(option)}
+                          className={`${baseClasses} ${stateClasses}`}
+                          aria-pressed={isActive}
+                        >
+                          <span className="text-sm font-semibold text-zinc-800">{option.label}</span>
+                          {option.description ? (
+                            <span className="text-[11px] leading-snug text-zinc-500">{option.description}</span>
+                          ) : null}
+                        </button>
+                      );
+                    })}
+                  </div>
+                  <p className="mt-4 text-[10px] uppercase tracking-[0.28em] text-zinc-400">
+                    You can switch assistants later with slash commands.
+                  </p>
+                </div>
+              ) : (
                 <div className="rounded-3xl border border-dashed border-zinc-300 bg-zinc-50 px-5 py-6 text-center text-[11px] text-zinc-500">
                   Start by asking a question or switch modules to explore different stages of your flow.
                 </div>
-              )}
+              )
+            )}
 
-              {/* sandbox iframe will be rendered after the last user message */}
+            {/* sandbox iframe will be rendered after the last user message */}
 
           {displayedMessages.map((msg, idx) => {
             const isUser = msg.role === "user";
@@ -743,8 +738,6 @@ export default function ChatSection({
             const bubbleClass = `rounded-xl border border-zinc-200 px-3 py-2 ${isUser ? "bg-[var(--brand-lighter)] text-[var(--brand-dark)] font-medium" : "bg-white text-zinc-700"} ${isPendingMessage ? "opacity-70" : ""}`;
             const alignmentClass = isUser ? "justify-end" : "justify-start";
             const canEdit = isUser && hasText && !isPendingMessage;
-            const shouldRenderStepper = isLiveDemo && liveDemoTodoSteps?.length > 0 && isUser;
-
             if (showModuleCanvas) {
               return (
                 <React.Fragment key={messageKey}>
@@ -753,7 +746,7 @@ export default function ChatSection({
                       <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_top,rgba(242,60,57,0.12),transparent_60%)]" />
                       <div className="sticky top-0 z-20 ml-auto flex w-fit justify-end gap-2">
                         <button onClick={() => handleCanvasCopy(idx)} className="flex h-8 w-8 items-center justify-center rounded-xl border border-zinc-200 bg-white text-zinc-600 shadow-sm transition hover:border-[var(--brand-light)] hover:text-[var(--brand)]" title="Copy to clipboard" aria-label="Copy">
-                          {copyClicked === idx || copiedMessageKey === `canvas-${idx}` ? <IoCheckmark size={15} /> : <IoCopyOutline size={15} />}
+                          {copiedMessageKey === `canvas-${idx}` ? <IoCheckmark size={15} /> : <IoCopyOutline size={15} />}
                         </button>
                         <button onClick={() => onDownload(idx)} className="flex h-8 w-8 items-center justify-center rounded-xl border border-zinc-200 bg-white text-zinc-600 shadow-sm transition hover:border-[var(--brand-light)] hover:text-[var(--brand)]" title="Download" aria-label="Download">
                           <IoDownloadOutline size={15} />
@@ -762,22 +755,6 @@ export default function ChatSection({
                       <ReactMarkdown className="relative z-10 space-y-1 break-words" components={markdownComponents}>{messageText || ""}</ReactMarkdown>
                     </div>
                   </div>
-                  {hasSandboxPreview && (
-                    <div key={`sandbox-${idx}`} className="rounded-3xl border border-zinc-200 bg-white shadow-[0_14px_36px_rgba(17,17,17,0.12)]">
-                      <div className="relative w-full overflow-hidden rounded-3xl">
-                        {isVideoPreview ? (
-                          <div className="p-0">
-                            <video src={normalizedSandboxUrl} controls className="h-[320px] w-full object-contain bg-black" />
-                            <div className="p-2 text-right">
-                              <a href={normalizedSandboxUrl} target="_blank" rel="noreferrer" className="text-sm font-medium text-[var(--brand)]">Open video</a>
-                            </div>
-                          </div>
-                        ) : (
-                          <iframe src={normalizedSandboxUrl} title="Live sandbox preview" className="h-[320px] w-full pointer-events-none" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowFullScreen />
-                        )}
-                      </div>
-                    </div>
-                  )}
                 </React.Fragment>
               );
             }
@@ -804,45 +781,26 @@ export default function ChatSection({
                   </div>
                 </div>
 
-                {hasSandboxPreview && (
-                  <div key={`sandbox-${idx}`} className="rounded-3xl border border-zinc-200 bg-white shadow-[0_14px_36px_rgba(17,17,17,0.12)]">
-                    <div className="relative w-full overflow-hidden rounded-3xl">
-                      {isVideoPreview ? (
-                        <div className="p-0">
-                          <video src={normalizedSandboxUrl} controls className="h-[320px] w-full object-contain bg-black" />
-                          <div className="p-2 text-right">
-                            <a href={normalizedSandboxUrl} target="_blank" rel="noreferrer" className="text-sm font-medium text-[var(--brand)]">Open video</a>
-                          </div>
-                        </div>
-                      ) : (
-                        <iframe src={normalizedSandboxUrl} title="Live sandbox preview" className="h-[320px] w-full pointer-events-none" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowFullScreen />
-                      )}
-                    </div>
-                  </div>
-                )}
-
-                {shouldRenderStepper && (
-                  <div className="mt-4 overflow-x-auto">
-                    <div className="flex items-center gap-4 px-2">
-                      {liveDemoTodoSteps.map((todo, stepIndex) => {
-                        const statusMeta = TODO_STATUS_META[todo.status] ?? TODO_STATUS_META.pending;
-                        const previousMeta = liveDemoTodoSteps[stepIndex - 1] ? (TODO_STATUS_META[liveDemoTodoSteps[stepIndex - 1].status] ?? TODO_STATUS_META.pending) : TODO_STATUS_META.pending;
-                        return (
-                          <React.Fragment key={todo.key}>
-                            {stepIndex > 0 && <span className={`mt-3 h-[2px] flex-1 rounded-full ${previousMeta.connectorClass}`} />}
-                            <div className="flex min-w-[120px] max-w-[180px] flex-col items-center gap-2 text-center">
-                              <span className={`flex h-9 w-9 items-center justify-center rounded-full border text-[12px] font-semibold transition ${statusMeta.circleClass}`}>{stepIndex + 1}</span>
-                              <span className={`text-[11px] font-medium leading-snug ${statusMeta.labelClass}`}>{todo.content}</span>
-                            </div>
-                          </React.Fragment>
-                        );
-                      })}
-                    </div>
-                  </div>
-                )}
               </React.Fragment>
             );
           })}
+
+          {hasSandboxPreview && (
+            <div className="rounded-3xl border border-zinc-200 bg-white shadow-[0_14px_36px_rgba(17,17,17,0.12)]">
+              <div className="relative w-full overflow-hidden rounded-3xl">
+                {isVideoPreview ? (
+                  <div className="p-0">
+                    <video src={normalizedSandboxUrl} controls className="h-[320px] w-full object-contain bg-black" />
+                    <div className="p-2 text-right">
+                      <a href={normalizedSandboxUrl} target="_blank" rel="noreferrer" className="text-sm font-medium text-[var(--brand)]">Open video</a>
+                    </div>
+                  </div>
+                ) : (
+                  <iframe src={normalizedSandboxUrl} title="Live sandbox preview" className="h-[320px] w-full pointer-events-none" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowFullScreen />
+                )}
+              </div>
+            </div>
+          )}
 
           {streamError && (
             <div className="flex w-full justify-start">
@@ -864,7 +822,6 @@ export default function ChatSection({
                 </div>
               )}
             </>
-          )}
         </div>
         {!isAtBottom && (
           <div className="pointer-events-none absolute bottom-24 left-1/2 -translate-x-1/2 transform">
@@ -930,7 +887,7 @@ export default function ChatSection({
                 }}
                 disabled={isLoading}
                 rows={2}
-                placeholder={`Ask something in ${activeTab}...`}
+                placeholder="Ask something..."
                 className={`w-full resize-none rounded-2xl border border-zinc-200 bg-white pr-14 px-4 py-3 text-[12px] text-zinc-700 shadow-[0_8px_32px_rgba(15,23,42,0.08)] transition placeholder:text-zinc-400 focus:border-[var(--brand)] focus:outline-none focus:ring-2 focus:ring-[var(--brand-light)] hover:border-[var(--brand-light)] hover:shadow-[0_12px_36px_rgba(242,60,57,0.12)] ${isLoading ? "cursor-not-allowed opacity-60" : ""}`}
               />
 
