@@ -38,7 +38,6 @@ export default function LeftSidebar({
   onToggleCollapse,
   refreshKey,
   selectedChatId,
-  onOpenThread,
 }) {
   const [threads, setThreads] = useState([]);
   const [currentId, setCurrentId] = useState(null);
@@ -121,19 +120,11 @@ export default function LeftSidebar({
   ) : null;
 
   const handleNavigate = (targetId) => {
-    if (!targetId) return;
+    if (!targetId || !onNavigate) {
+      return;
+    }
+    onNavigate(`/chat/${targetId}`);
     setCurrentId(targetId);
-    // Notify workspace to open thread (so it can update assistant id and refresh)
-    if (typeof onOpenThread === "function") {
-      try {
-        onOpenThread(targetId);
-      } catch (err) {
-        console.warn("onOpenThread handler threw:", err);
-      }
-    }
-    if (typeof onNavigate === "function") {
-      onNavigate(`/chat/${targetId}`);
-    }
   };
 
   const handleNewChat = () => {
@@ -157,7 +148,7 @@ export default function LeftSidebar({
       >
         <IoAdd size={16} />
       </button>
-      {collapsedThemeToggle}
+      {/* {collapsedThemeToggle} */}
       <div className="flex-1 flex flex-col items-center justify-center gap-4 text-[10px] font-medium uppercase tracking-[0.32em] text-zinc-400">
         <span className="sr-only">History hidden while collapsed</span>
         <div className="h-14 w-px rounded-full bg-zinc-200" />
@@ -181,7 +172,7 @@ export default function LeftSidebar({
         >
           <IoAdd size={16} /> New
         </button>
-        {expandedThemeToggle}
+        {/* {expandedThemeToggle} */}
       </div>
 
       <div className="flex flex-1 flex-col overflow-hidden">
@@ -233,7 +224,7 @@ export default function LeftSidebar({
 
   return (
     <div key={refreshKey}
-      className={`relative flex h-full transition-all duration-300 ease-in-out ${isCollapsed ? "w-16" : "w-64"
+      className={`relative flex h-[81%] transition-all duration-300 ease-in-out ${isCollapsed ? "w-16" : "w-64"
         }`}
     >
       <aside

@@ -1589,12 +1589,7 @@ export default function workSpaceLayout({ onNavigate, chatId }) {
 
         <div className="flex min-h-0 flex-1 gap-3 overflow-hidden">
           <div>
-            <TopHeader
-              assistantId={assistantId}
-              isLoading={isLoading}
-              onNewChat={startNewChat}
-              theme={theme}
-            />
+            <TopHeader theme={theme} isLeftCollapsed={isLeftCollapsed}  />
             <LeftSidebar
               theme={theme}
               isCollapsed={isLeftCollapsed}
