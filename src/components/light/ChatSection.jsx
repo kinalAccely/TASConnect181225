@@ -156,11 +156,11 @@ const extractModuleText = (modulePayload) => {
             ? value.content
             : Array.isArray(value.content)
               ? value.content
-                  .map((item) =>
-                    typeof item === "string" ? item : traverse(item),
-                  )
-                  .filter(Boolean)
-                  .join("")
+                .map((item) =>
+                  typeof item === "string" ? item : traverse(item),
+                )
+                .filter(Boolean)
+                .join("")
               : traverse(value.content);
         if (contentText) {
           return contentText;
@@ -645,6 +645,24 @@ export default function ChatSection({
     [],
   );
 
+  const modulesToShow = [
+    {
+      id: "chat", label: "Chat", icon: (
+        <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z" /></svg>
+      )
+    },
+    {
+      id: "training_module_graph", label: "Training", icon: (
+        <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="4" width="18" height="14" rx="2" ry="2" /><path d="M8 2v4" /><path d="M16 2v4" /></svg>
+      )
+    },
+    {
+      id: "live_demo", label: "Live Demo", icon: (
+        <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10" /><path d="M10 8l6 4-6 4z" /></svg>
+      )
+    },
+  ];
+
   return (
     <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-hidden">
       <div className="relative flex h-full min-h-0 flex-col overflow-hidden rounded-3xl border border-zinc-200 bg-white shadow-[0_22px_48px_rgba(17,17,17,0.08)] backdrop-blur-md">
@@ -654,174 +672,132 @@ export default function ChatSection({
         >
           <>
             {displayedMessages.length === 0 && (
-              hasAssistantSuggestions ? (
-                <div className="rounded-3xl border border-zinc-200 bg-white/95 px-6 py-6 text-left shadow-[0_18px_36px_rgba(15,23,42,0.08)]">
-                  <div className="flex flex-col gap-2">
-                    <span className="text-[10px] font-semibold uppercase tracking-[0.32em] text-zinc-400">
-                      Choose a starting point
-                    </span>
-                    <h2 className="text-base font-semibold text-zinc-800">
-                      What would you like to do?
-                    </h2>
-                    <p className="text-[11px] text-zinc-500">
-                      Pick an assistant to tailor the workspace for chat, training, or guided live demos.
-                    </p>
-                  </div>
-                  <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-                    {suggestionItems.map((option) => {
-                      const isActive = normalizedCurrentAssistantId.length > 0 && option.id === normalizedCurrentAssistantId;
-                      const baseClasses =
-                        "flex h-full w-full flex-col items-start gap-2 rounded-2xl border px-4 py-3 text-left transition focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--brand-light)]";
-                      const stateClasses = isActive
-                        ? "border-[var(--brand)] bg-[var(--brand-lighter)]/70 text-[var(--brand-dark)] shadow-[0_14px_28px_rgba(242,60,57,0.18)]"
-                        : "border-zinc-200 bg-white text-zinc-600 hover:border-[var(--brand-light)] hover:shadow-[0_18px_32px_rgba(242,60,57,0.12)]";
-                      return (
-                        <button
-                          key={option.id}
-                          type="button"
-                          onClick={() => handleSuggestionClick(option)}
-                          className={`${baseClasses} ${stateClasses}`}
-                          aria-pressed={isActive}
-                        >
-                          <span className="text-sm font-semibold text-zinc-800">{option.label}</span>
-                          {option.description ? (
-                            <span className="text-[11px] leading-snug text-zinc-500">{option.description}</span>
-                          ) : null}
-                        </button>
-                      );
-                    })}
-                  </div>
-                  <p className="mt-4 text-[10px] uppercase tracking-[0.28em] text-zinc-400">
-                    You can switch assistants later with slash commands.
-                  </p>
-                </div>
-              ) : (
-                <div className="rounded-3xl border border-dashed border-zinc-300 bg-zinc-50 px-5 py-6 text-center text-[11px] text-zinc-500">
-                  Start by asking a question or switch modules to explore different stages of your flow.
-                </div>
-              )
-            )}
+              <div className="rounded-3xl border border-dashed border-zinc-300 bg-zinc-50 px-5 py-6 text-center text-[11px] text-zinc-500">
+                Start by asking a question or switch modules to explore different stages of your flow.
+              </div>
+            )
+            }
 
             {/* sandbox iframe will be rendered after the last user message */}
 
-          {displayedMessages.map((msg, idx) => {
-            const isUser = msg.role === "user";
-            const isStreaming = Boolean(msg.isStreaming);
-            const isPendingMessage = Boolean(msg.isPending);
-            const moduleCandidates = [
-              msg.module,
-              msg.module_output,
-              msg.moduleOutput,
-              msg.moduleResult,
-              msg.modules,
-              msg.raw?.module,
-              msg.raw?.module_output,
-              msg.raw?.moduleResult,
-              msg.raw?.modules,
-            ];
-            const hasModuleData = moduleCandidates.some((candidate) => {
-              if (!candidate) return false;
-              if (typeof candidate === "string") return candidate.trim().length > 0;
-              if (Array.isArray(candidate)) return candidate.length > 0;
-              if (typeof candidate === "object") return Object.keys(candidate).length > 0;
-              return true;
-            });
-            const forceModuleCanvas = Boolean(
-              msg.generate_module ?? msg.metadata?.generate_module ?? msg.raw?.generate_module ?? msg.raw?.metadata?.generate_module,
-            );
-            const showModuleCanvas = !isUser && (hasModuleData || forceModuleCanvas);
-            const messageText = typeof msg.text === "string" ? msg.text : "";
-            const hasText = messageText.trim().length > 0;
-            const messageKey = typeof msg.id === "string" || typeof msg.id === "number" ? msg.id : `${msg.role ?? "message"}-${idx}`;
+            {displayedMessages.map((msg, idx) => {
+              const isUser = msg.role === "user";
+              const isStreaming = Boolean(msg.isStreaming);
+              const isPendingMessage = Boolean(msg.isPending);
+              const moduleCandidates = [
+                msg.module,
+                msg.module_output,
+                msg.moduleOutput,
+                msg.moduleResult,
+                msg.modules,
+                msg.raw?.module,
+                msg.raw?.module_output,
+                msg.raw?.moduleResult,
+                msg.raw?.modules,
+              ];
+              const hasModuleData = moduleCandidates.some((candidate) => {
+                if (!candidate) return false;
+                if (typeof candidate === "string") return candidate.trim().length > 0;
+                if (Array.isArray(candidate)) return candidate.length > 0;
+                if (typeof candidate === "object") return Object.keys(candidate).length > 0;
+                return true;
+              });
+              const forceModuleCanvas = Boolean(
+                msg.generate_module ?? msg.metadata?.generate_module ?? msg.raw?.generate_module ?? msg.raw?.metadata?.generate_module,
+              );
+              const showModuleCanvas = !isUser && (hasModuleData || forceModuleCanvas);
+              const messageText = typeof msg.text === "string" ? msg.text : "";
+              const hasText = messageText.trim().length > 0;
+              const messageKey = typeof msg.id === "string" || typeof msg.id === "number" ? msg.id : `${msg.role ?? "message"}-${idx}`;
 
-            const bubbleBase = "max-w-[100%] whitespace-pre-wrap text-[12.5px] leading-sung pt-3 pb-3";
-            const bubbleClass = `rounded-xl border border-zinc-200 px-3 py-2 ${isUser ? "bg-[var(--brand-lighter)] text-[var(--brand-dark)] font-medium" : "bg-white text-zinc-700"} ${isPendingMessage ? "opacity-70" : ""}`;
-            const alignmentClass = isUser ? "justify-end" : "justify-start";
-            const canEdit = isUser && hasText && !isPendingMessage;
-            if (showModuleCanvas) {
+              const bubbleBase = "max-w-[100%] whitespace-pre-wrap text-[12.5px] leading-sung pt-3 pb-3";
+              const bubbleClass = `rounded-xl border border-zinc-200 px-3 py-2 ${isUser ? "bg-[var(--brand-lighter)] text-[var(--brand-dark)] font-medium" : "bg-white text-zinc-700"} ${isPendingMessage ? "opacity-70" : ""}`;
+              const alignmentClass = isUser ? "justify-end" : "justify-start";
+              const canEdit = isUser && hasText && !isPendingMessage;
+              if (showModuleCanvas) {
+                return (
+                  <React.Fragment key={messageKey}>
+                    <div style={{ display: "flex", justifyContent: "center" }}>
+                      <div id={`canvas_${idx}`} style={{ width: "700px" }} className="relative max-h-[400px] overflow-auto rounded-xl bg-zinc-50 z px-4 py-4 text-[11.5px] leading-relaxed text-zinc-600 shadow-[inset_0_2px_12px_rgba(242,60,57,0.12)]">
+                        <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_top,rgba(242,60,57,0.12),transparent_60%)]" />
+                        <div className="sticky top-0 z-20 ml-auto flex w-fit justify-end gap-2">
+                          <button onClick={() => handleCanvasCopy(idx)} className="flex h-8 w-8 items-center justify-center rounded-xl border border-zinc-200 bg-white text-zinc-600 shadow-sm transition hover:border-[var(--brand-light)] hover:text-[var(--brand)]" title="Copy to clipboard" aria-label="Copy">
+                            {copiedMessageKey === `canvas-${idx}` ? <IoCheckmark size={15} /> : <IoCopyOutline size={15} />}
+                          </button>
+                          <button onClick={() => onDownload(idx)} className="flex h-8 w-8 items-center justify-center rounded-xl border border-zinc-200 bg-white text-zinc-600 shadow-sm transition hover:border-[var(--brand-light)] hover:text-[var(--brand)]" title="Download" aria-label="Download">
+                            <IoDownloadOutline size={15} />
+                          </button>
+                        </div>
+                        <ReactMarkdown className="relative z-10 space-y-1 break-words" components={markdownComponents}>{messageText || ""}</ReactMarkdown>
+                      </div>
+                    </div>
+                  </React.Fragment>
+                );
+              }
+
               return (
                 <React.Fragment key={messageKey}>
-                  <div style={{ display: "flex", justifyContent: "center" }}>
-                    <div id={`canvas_${idx}`} style={{ width: "700px" }} className="relative max-h-[400px] overflow-auto rounded-xl bg-zinc-50 z px-4 py-4 text-[11.5px] leading-relaxed text-zinc-600 shadow-[inset_0_2px_12px_rgba(242,60,57,0.12)]">
-                      <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_top,rgba(242,60,57,0.12),transparent_60%)]" />
-                      <div className="sticky top-0 z-20 ml-auto flex w-fit justify-end gap-2">
-                        <button onClick={() => handleCanvasCopy(idx)} className="flex h-8 w-8 items-center justify-center rounded-xl border border-zinc-200 bg-white text-zinc-600 shadow-sm transition hover:border-[var(--brand-light)] hover:text-[var(--brand)]" title="Copy to clipboard" aria-label="Copy">
-                          {copiedMessageKey === `canvas-${idx}` ? <IoCheckmark size={15} /> : <IoCopyOutline size={15} />}
-                        </button>
-                        <button onClick={() => onDownload(idx)} className="flex h-8 w-8 items-center justify-center rounded-xl border border-zinc-200 bg-white text-zinc-600 shadow-sm transition hover:border-[var(--brand-light)] hover:text-[var(--brand)]" title="Download" aria-label="Download">
-                          <IoDownloadOutline size={15} />
-                        </button>
+                  <div className={`flex w-full ${alignmentClass}`}>
+                    <div className={`group flex max-w-[80%] flex-col gap-1 ${isUser ? "items-start" : "items-end"}`}>
+                      <div className={`relative ${bubbleBase} ${bubbleClass} text-[11.5px]`}>
+                        <div className="pointer-events-none absolute bottom-1.5 right-1.5 z-10 flex gap-2 opacity-0 transition group-hover:opacity-100">
+                          <button type="button" onClick={() => handleCopyMessage(messageText, messageKey)} className="pointer-events-auto flex h-6 w-6 items-center justify-center rounded-full border border-zinc-200 bg-white/95 text-zinc-500 shadow-sm transition hover:border-[var(--brand-light)] hover:text-[var(--brand)]" aria-label="Copy message" title="Copy message">
+                            {copiedMessageKey === messageKey ? <IoCheckmark size={12} /> : <IoCopyOutline size={12} />}
+                          </button>
+                          {canEdit && (
+                            <button type="button" onClick={() => onInputChange(messageText)} className="pointer-events-auto flex h-6 w-6 items-center justify-center rounded-full border border-zinc-200 bg-white/95 text-zinc-500 shadow-sm transition hover:border-[var(--brand-light)] hover:text-[var(--brand)]" aria-label="Edit message" title="Edit message" disabled={isLoading}>
+                              <IoCreateOutline size={12} />
+                            </button>
+                          )}
+                        </div>
+                        <ReactMarkdown className="markdown-body space-y-2 break-words" components={markdownComponents}>{messageText || ""}</ReactMarkdown>
+                        {isStreaming && <span className="ml-2 inline-block animate-pulse text-[rgba(242,60,57,0.6)]">...</span>}
+                        {isPendingMessage && !isStreaming && <span className="mt-1 block text-[10px] text-zinc-400">Sending…</span>}
                       </div>
-                      <ReactMarkdown className="relative z-10 space-y-1 break-words" components={markdownComponents}>{messageText || ""}</ReactMarkdown>
                     </div>
                   </div>
+
                 </React.Fragment>
               );
-            }
+            })}
 
-            return (
-              <React.Fragment key={messageKey}>
-                <div className={`flex w-full ${alignmentClass}`}>
-                  <div className={`group flex max-w-[80%] flex-col gap-1 ${isUser ? "items-start" : "items-end"}`}>
-                    <div className={`relative ${bubbleBase} ${bubbleClass} text-[11.5px]`}>
-                      <div className="pointer-events-none absolute bottom-1.5 right-1.5 z-10 flex gap-2 opacity-0 transition group-hover:opacity-100">
-                        <button type="button" onClick={() => handleCopyMessage(messageText, messageKey)} className="pointer-events-auto flex h-6 w-6 items-center justify-center rounded-full border border-zinc-200 bg-white/95 text-zinc-500 shadow-sm transition hover:border-[var(--brand-light)] hover:text-[var(--brand)]" aria-label="Copy message" title="Copy message">
-                          {copiedMessageKey === messageKey ? <IoCheckmark size={12} /> : <IoCopyOutline size={12} />}
-                        </button>
-                        {canEdit && (
-                          <button type="button" onClick={() => onInputChange(messageText)} className="pointer-events-auto flex h-6 w-6 items-center justify-center rounded-full border border-zinc-200 bg-white/95 text-zinc-500 shadow-sm transition hover:border-[var(--brand-light)] hover:text-[var(--brand)]" aria-label="Edit message" title="Edit message" disabled={isLoading}>
-                            <IoCreateOutline size={12} />
-                          </button>
-                        )}
+            {hasSandboxPreview && (
+              <div className="rounded-3xl border border-zinc-200 bg-white shadow-[0_14px_36px_rgba(17,17,17,0.12)]">
+                <div className="relative w-full overflow-hidden rounded-3xl">
+                  {isVideoPreview ? (
+                    <div className="p-0">
+                      <video src={normalizedSandboxUrl} controls className="h-[320px] w-full object-contain bg-black" />
+                      <div className="p-2 text-right">
+                        <a href={normalizedSandboxUrl} target="_blank" rel="noreferrer" className="text-sm font-medium text-[var(--brand)]">Open video</a>
                       </div>
-                      <ReactMarkdown className="markdown-body space-y-2 break-words" components={markdownComponents}>{messageText || ""}</ReactMarkdown>
-                      {isStreaming && <span className="ml-2 inline-block animate-pulse text-[rgba(242,60,57,0.6)]">...</span>}
-                      {isPendingMessage && !isStreaming && <span className="mt-1 block text-[10px] text-zinc-400">Sending…</span>}
                     </div>
-                  </div>
+                  ) : (
+                    <iframe src={normalizedSandboxUrl} title="Live sandbox preview" className="h-[320px] w-full pointer-events-none" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowFullScreen />
+                  )}
                 </div>
-
-              </React.Fragment>
-            );
-          })}
-
-          {hasSandboxPreview && (
-            <div className="rounded-3xl border border-zinc-200 bg-white shadow-[0_14px_36px_rgba(17,17,17,0.12)]">
-              <div className="relative w-full overflow-hidden rounded-3xl">
-                {isVideoPreview ? (
-                  <div className="p-0">
-                    <video src={normalizedSandboxUrl} controls className="h-[320px] w-full object-contain bg-black" />
-                    <div className="p-2 text-right">
-                      <a href={normalizedSandboxUrl} target="_blank" rel="noreferrer" className="text-sm font-medium text-[var(--brand)]">Open video</a>
-                    </div>
-                  </div>
-                ) : (
-                  <iframe src={normalizedSandboxUrl} title="Live sandbox preview" className="h-[320px] w-full pointer-events-none" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowFullScreen />
-                )}
               </div>
-            </div>
-          )}
+            )}
 
-          {streamError && (
-            <div className="flex w-full justify-start">
-              <div className="max-w-[80%] rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-[11.5px] text-red-600 shadow-inner shadow-red-200/60">
-                <strong className="block text-[10px] uppercase tracking-[0.26em] text-red-500">
-                  Stream Error
-                </strong>
-                <span className="mt-1 block whitespace-pre-wrap">{streamError}</span>
-              </div>
-            </div>
-          )}
-
-          {isLoading && (
-            <div className="flex w-full justify-start">
-              <div className="flex items-center gap-2 rounded-xl bg-zinc-100 px-3 py-2 text-[11.5px] text-zinc-600 shadow-lg shadow-[0_16px_32px_rgba(242,60,57,0.14)]">
-                <span className="h-2 w-2 animate-ping rounded-full bg-[var(--brand)]" />
-                    <span className="animate-pulse">Thinking???</span>
-                  </div>
+            {streamError && (
+              <div className="flex w-full justify-start">
+                <div className="max-w-[80%] rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-[11.5px] text-red-600 shadow-inner shadow-red-200/60">
+                  <strong className="block text-[10px] uppercase tracking-[0.26em] text-red-500">
+                    Stream Error
+                  </strong>
+                  <span className="mt-1 block whitespace-pre-wrap">{streamError}</span>
                 </div>
-              )}
-            </>
+              </div>
+            )}
+
+            {isLoading && (
+              <div className="flex w-full justify-start">
+                <div className="flex items-center gap-2 rounded-xl bg-zinc-100 px-3 py-2 text-[11.5px] text-zinc-600 shadow-lg shadow-[0_16px_32px_rgba(242,60,57,0.14)]">
+                  <span className="h-2 w-2 animate-ping rounded-full bg-[var(--brand)]" />
+                  <span className="animate-pulse">Thinking???</span>
+                </div>
+              </div>
+            )}
+          </>
         </div>
         {!isAtBottom && (
           <div className="pointer-events-none absolute bottom-24 left-1/2 -translate-x-1/2 transform">
@@ -876,6 +852,32 @@ export default function ChatSection({
         <div className="border-t border-zinc-200 bg-white px-5 py-3">
           <div className="flex items-center gap-3">
             <div className="relative flex-1">
+              {hasAssistantSuggestions && (
+                <div className="absolute left-4 bottom-16 z-30 w-[320px] rounded-xl border border-zinc-200 bg-white shadow-lg">
+                  <div className="p-3">
+                    {suggestionItems.map((option) => (
+                      <button
+                        key={option.id}
+                        type="button"
+                        onClick={() => handleSuggestionClick(option)}
+                        className="w-full text-left px-3 py-2 hover:bg-zinc-50"
+                      >
+                        <div className="text-sm font-semibold text-zinc-800">{option.label}</div>
+                        {option.description ? (
+                          <div className="text-[11px] text-zinc-500">{option.description}</div>
+                        ) : null}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+              {/* Selected module bar (shows current assistant/module) */}
+              {normalizedCurrentAssistantId && (() => {
+                // icon-only module selector: chat, training, live_demo
+                const activeId = normalizedCurrentAssistantId;
+
+
+              })()}
               <textarea
                 value={input}
                 onChange={(event) => onInputChange(event.target.value)}
@@ -902,14 +904,41 @@ export default function ChatSection({
                     <IoStopCircleOutline size={18} />
                   </button>
                 ) : (
-                  <button
-                    type="button"
-                    onClick={handleSend}
-                    className="flex h-10 w-10 items-center justify-center rounded-full bg-[var(--brand)] text-white shadow-sm hover:scale-[1.03] transition"
-                    aria-label="Send"
-                  >
-                    <IoSend size={16} />
-                  </button>
+                  <div style={{display: "flex", gap: "10px"}}>
+                    <button
+                      type="button"
+                      onClick={handleSend}
+                      className="flex h-10 w-10 items-center justify-center rounded-full bg-[var(--brand)] text-white shadow-sm hover:scale-[1.03] transition"
+                      aria-label="Send"
+                    >
+                      <IoSend size={16} />
+                    </button>
+                    
+                    <div className="mb-3 flex items-center gap-2">
+                      
+                      {modulesToShow.map((m) => {
+                        const isActive = m.id === normalizedCurrentAssistantId;
+                        return (
+                          isActive && (
+                            <button
+                              key={m.id}
+                              type="button"
+                              onClick={() =>
+                                handleSuggestionClick({ id: m.id, label: m.label })
+                              }
+                              title={m.label}
+                              className={`flex h-9 w-9 items-center justify-center rounded-full border px-2 text-sm transition ${isActive
+                                ? "border-[var(--brand)] bg-[var(--brand)]/10 text-[var(--brand-dark)] shadow-sm"
+                                : "border-zinc-200 bg-white text-zinc-600 hover:border-[var(--brand-light)]"
+                                }`}
+                            >
+                              {m.icon}
+                            </button>
+                          )
+                        );
+                      })}
+                    </div>
+                  </div>
                 )}
               </div>
             </div>

@@ -776,7 +776,7 @@ export default function ChatSection({
                           title="Copy to clipboard"
                           aria-label="Copy"
                         >
-                          {copyClicked === idx || copiedMessageKey === `canvas-${idx}` ? (
+                          {copiedMessageKey === `canvas-${idx}` ? (
                             <IoCheckmark size={15} />
                           ) : (
                             <IoCopyOutline size={15} />

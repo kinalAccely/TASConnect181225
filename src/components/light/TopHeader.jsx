@@ -24,36 +24,9 @@ const TopHeader = ({ assistantId, isLoading, onNewChat }) => {
           </div>
         </div>
 
-        <div className="flex items-center gap-2 text-xs uppercase tracking-[0.32em] text-zinc-500">
-          <Sparkles size={16} className="text-[var(--brand)]" />
-          Unified Workspace
-        </div>
-
         <p className="text-xs font-medium uppercase tracking-[0.24em] text-zinc-500">
           Powered by <span className="text-black">Eerly.Ai</span>
         </p>
-
-        <p className="text-[11px] text-zinc-500">
-          Use slash commands (for example <code>/agent</code>) to switch assistants instantly.
-        </p>
-      </div>
-
-      <div className="flex flex-col items-start gap-3 text-sm text-zinc-600 md:items-end">
-        <div className="rounded-2xl border border-zinc-200 bg-zinc-50 px-4 py-2 text-xs font-semibold uppercase tracking-[0.26em] text-zinc-500">
-          Current Assistant
-          <span className="ml-2 rounded-full bg-white px-3 py-1 text-[11px] font-semibold text-zinc-700 shadow-inner shadow-zinc-200/60">
-            {assistantId}
-          </span>
-        </div>
-        <button
-          type="button"
-          onClick={handleNewChat}
-          disabled={isLoading}
-          className="inline-flex items-center gap-2 rounded-2xl bg-gradient-to-r from-[var(--brand)] via-[var(--brand)] to-[var(--brand-dark)] px-4 py-2 text-sm font-semibold text-white shadow-lg shadow-[0_18px_32px_rgba(242,60,57,0.28)] transition focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--brand-light)] disabled:cursor-not-allowed disabled:opacity-60"
-        >
-          <PlusCircle size={16} />
-          New Chat
-        </button>
       </div>
     </header>
   );

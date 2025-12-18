@@ -709,15 +709,15 @@ export default function workSpaceLayout({ onNavigate, chatId }) {
       const resolvedRunMeta =
         directRunId || nestedRunId
           ? {
-              run_id: directRunId ?? nestedRunId,
-              thread_id:
-                typeof metadata.thread_id === "string"
-                  ? metadata.thread_id
-                  : typeof metadata?.run?.thread_id === "string"
-                    ? metadata.run.thread_id
-                    : undefined,
-              
-            }
+            run_id: directRunId ?? nestedRunId,
+            thread_id:
+              typeof metadata.thread_id === "string"
+                ? metadata.thread_id
+                : typeof metadata?.run?.thread_id === "string"
+                  ? metadata.run.thread_id
+                  : undefined,
+
+          }
           : undefined;
 
       if (resolvedRunMeta) {
@@ -1030,10 +1030,10 @@ export default function workSpaceLayout({ onNavigate, chatId }) {
     const modulePayload =
       streamValues && typeof streamValues === "object"
         ? streamValues.canvas ??
-          streamValues.canvas_data ??
-          streamValues.module ??
-          streamValues.modules ??
-          undefined
+        streamValues.canvas_data ??
+        streamValues.module ??
+        streamValues.modules ??
+        undefined
         : undefined;
 
     if (!modulePayload) {
@@ -1089,11 +1089,15 @@ export default function workSpaceLayout({ onNavigate, chatId }) {
     return [...messagesWithCanvas, ...pendingMessages];
   }, [messagesWithCanvas, pendingMessages]);
 
-  const shouldShowAssistantSuggestions =
-    showAssistantChooser &&
-    !activeThreadId &&
-    normalizedMessages.length === 0 &&
-    !isLoading;
+  // Treat the case where the only message is an assistant-switch system message
+  // (we add these after selecting an assistant) as effectively empty so the
+  // suggestion chooser can still show.
+  const hasOnlyAssistantSwitchMessage =
+    normalizedMessages.length === 1 &&
+    typeof normalizedMessages[0]?.id === "string" &&
+    normalizedMessages[0].id.startsWith("assistant-switch-");
+
+  const shouldShowAssistantSuggestions = showAssistantChooser && !activeThreadId;
 
   const sandboxUrl = React.useMemo(() => {
     if (!streamValues || typeof streamValues !== "object") {
@@ -1159,19 +1163,25 @@ export default function workSpaceLayout({ onNavigate, chatId }) {
     (value) => {
       setInput(value);
 
+      // If there's an active thread, don't show assistant chooser
       if (activeThreadId) {
         setShowAssistantChooser(false);
         return;
       }
 
       const normalized = typeof value === "string" ? value.trimStart() : "";
-      if (normalized.startsWith("/") && normalized.length > 0) {
+      // Show suggestions whenever the user types a leading slash and there's no active thread
+      if (normalized.startsWith("/")) {
         setShowAssistantChooser(true);
-      } else if (!normalized) {
-        setShowAssistantChooser(false);
-      } else {
-        setShowAssistantChooser(false);
+        return;
       }
+
+      // Otherwise hide the chooser for empty or regular input
+      // if (!normalized) {
+      //   setShowAssistantChooser(false);
+      // } else {
+      //   setShowAssistantChooser(false);
+      // }
     },
     [activeThreadId],
   );
@@ -1281,16 +1291,8 @@ export default function workSpaceLayout({ onNavigate, chatId }) {
           assistantId: nextAssistantId,
         };
       }
-      setPendingMessages((prev) => [
-        ...prev,
-        {
-          id: `assistant-switch-${Date.now()}`,
-          role: "system",
-          text: normalizedAnnouncement,
-          type: "system",
-          raw: { role: "system", content: normalizedAnnouncement },
-        },
-      ]);
+      // Do not insert a system/pending message into the chat when switching assistants.
+      // The UI header displays the current assistant; avoid cluttering the message list.
       setStreamError(null);
     },
     [assistantId, resetToolTracking, activeThreadId, chatId],
@@ -1450,6 +1452,14 @@ export default function workSpaceLayout({ onNavigate, chatId }) {
       return;
     }
 
+    // If the user typed a slash and there's no active thread, show suggestions and do not send
+    if (trimmed.startsWith("/") && !activeThreadId) {
+      setShowAssistantChooser(true);
+      setStreamError(null);
+      return;
+    }
+
+    // Existing slash-command behavior when a thread exists (or when resolving assistant by command)
     if (trimmed.startsWith("/")) {
       const slashMatch = trimmed.match(/^\/\s*([^\s]+)?/);
       const commandKey = slashMatch?.[1];
@@ -1507,7 +1517,7 @@ export default function workSpaceLayout({ onNavigate, chatId }) {
           streamSubgraphs: true,
           threadId: activeThreadId ?? undefined,
           onDisconnect: "cancel",
-          config: {recursion_limit : 100}
+          config: { recursion_limit: 100 }
         },
       );
       setRefreshKey((prev) => prev + 1);
@@ -1576,25 +1586,28 @@ export default function workSpaceLayout({ onNavigate, chatId }) {
   return (
     <div className={containerClassName}>
       <div className="flex h-full w-full min-h-0 max-w-8xl flex-col gap-4">
-        <TopHeader
-          assistantId={assistantId}
-          isLoading={isLoading}
-          onNewChat={startNewChat}
-          theme={theme}
-        />
 
         <div className="flex min-h-0 flex-1 gap-3 overflow-hidden">
-          <LeftSidebar
-            theme={theme}
-            isCollapsed={isLeftCollapsed}
-            isLoading={isLoading}
-            onNavigate={onNavigate}
-            onStartNewChat={startNewChat}
-            onToggleTheme={toggleTheme}
-            onToggleCollapse={toggleLeftCollapse}
-            refreshKey={refreshKey}
-            selectedChatId={selectedChatId}
-          />
+          <div>
+            <TopHeader
+              assistantId={assistantId}
+              isLoading={isLoading}
+              onNewChat={startNewChat}
+              theme={theme}
+            />
+            <LeftSidebar
+              theme={theme}
+              isCollapsed={isLeftCollapsed}
+              isLoading={isLoading}
+              onNavigate={onNavigate}
+              onOpenThread={handleThreadId}
+              onStartNewChat={startNewChat}
+              onToggleTheme={toggleTheme}
+              onToggleCollapse={toggleLeftCollapse}
+              refreshKey={refreshKey}
+              selectedChatId={selectedChatId}
+            />
+          </div>
 
           <ChatSection
             theme={theme}

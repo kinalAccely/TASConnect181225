@@ -38,6 +38,7 @@ export default function LeftSidebar({
   onToggleCollapse,
   refreshKey,
   selectedChatId,
+  onOpenThread,
 }) {
   const [threads, setThreads] = useState([]);
   const [currentId, setCurrentId] = useState(null);
@@ -120,11 +121,19 @@ export default function LeftSidebar({
   ) : null;
 
   const handleNavigate = (targetId) => {
-    if (!targetId || !onNavigate) {
-      return;
-    }
-    onNavigate(`/chat/${targetId}`);
+    if (!targetId) return;
     setCurrentId(targetId);
+    // Notify workspace to open thread (so it can update assistant id and refresh)
+    if (typeof onOpenThread === "function") {
+      try {
+        onOpenThread(targetId);
+      } catch (err) {
+        console.warn("onOpenThread handler threw:", err);
+      }
+    }
+    if (typeof onNavigate === "function") {
+      onNavigate(`/chat/${targetId}`);
+    }
   };
 
   const handleNewChat = () => {
