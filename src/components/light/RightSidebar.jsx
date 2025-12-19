@@ -1,5 +1,6 @@
 import React from "react";
 import ReactMarkdown from "react-markdown";
+import remarkGfm from 'remark-gfm';
 import { IoChevronBack, IoChevronForward } from "react-icons/io5";
 import { FileText } from "lucide-react";
 
@@ -305,6 +306,7 @@ export default function RightSidebar({
                     {message.roleLabel}
                   </div>
                   <ReactMarkdown
+                    remarkPlugins={[remarkGfm]}
                     className="mt-1 space-y-1 break-words"
                     components={markdownComponents}
                   >

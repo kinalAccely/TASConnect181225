@@ -1,5 +1,6 @@
 import React from "react";
 import ReactMarkdown from "react-markdown";
+import remarkGfm from 'remark-gfm';
 const SANDBOX_HOST = import.meta.env.VITE_SANDBOX_HOST ?? undefined;
 import {
   IoSend,
@@ -287,6 +288,17 @@ const resolveMessageText = (message) => {
   return segments.join("\n\n");
 };
 
+// Remove stray literal bullets that sometimes appear inside list items (e.g. "- • ITEM")
+const sanitizeMarkdownContent = (text) => {
+  if (typeof text !== 'string') return text ?? '';
+  // Normalize CRLF -> LF
+  let s = text.replace(/\r\n/g, '\n');
+  // Remove a literal bullet '•' when it immediately follows a markdown list marker
+  // e.g. "- • item" or "1. • item" -> "- item" / "1. item"
+  s = s.replace(/(^|\n)([ \t]*([-*+]|\d+\.)\s*)•\s*/g, '$1$2');
+  return s;
+};
+
 export default function ChatSection({
   chatBodyRef,
   input,
@@ -414,59 +426,21 @@ export default function ChatSection({
   );
   const hasSandboxPreview = Boolean(normalizedSandboxUrl);
 
-  const markdownComponents = React.useMemo(
-    () => ({
-      a: ({ node, ...props }) => (
-        <a
-          {...props}
-          className="font-semibold text-[var(--brand)] underline decoration-[var(--brand)] decoration-2 underline-offset-2"
-          target="_blank"
-          rel="noreferrer"
-        />
-      ),
-      code({ node, inline, className, children, ...props }) {
-        if (inline) {
-          return (
-            <code
-              className={`rounded bg-black/10 px-1 py-[0.1rem] font-mono text-[0.9em] ${className ?? ""}`}
-              {...props}
-            >
-              {children}
-            </code>
-          );
-        }
-        return (
-          <pre className="overflow-x-auto rounded-xl border border-zinc-200 bg-zinc-950/95 p-3 text-zinc-100 shadow-inner">
-            <code className="font-mono text-[0.9em]" {...props}>
-              {children}
-            </code>
-          </pre>
-        );
-      },
-      ul: ({ node, ...props }) => (
-        <ul className="ml-4 list-disc" {...props} />
-      ),
-      ol: ({ node, ...props }) => (
-        <ol className="ml-4 list-decimal" {...props} />
-      ),
-      h1: ({ node, ...props }) => (
-        <h1 className="text-lg font-bold text-zinc-800" {...props} />
-      ),
-      h2: ({ node, ...props }) => (
-        <h2 className="text-base font-bold text-zinc-800" {...props} />
-      ),
-      h3: ({ node, ...props }) => (
-        <h3 className="text-sm font-semibold text-zinc-800" {...props} />
-      ),
-      blockquote: ({ node, ...props }) => (
-        <blockquote
-          className="border-l-4 border-zinc-200 pl-3 italic text-inherit"
-          {...props}
-        />
-      ),
-    }),
-    [],
-  );
+  const markdownComponents = {
+    p: ({ node, ...props }) => (
+      <p className="m-0" {...props} />
+    ),
+    ul: ({ node, ...props }) => (
+      <ul className="ml-4 list-disc space-y-1" {...props} />
+    ),
+    ol: ({ node, ...props }) => (
+      <ol className="ml-4 list-decimal space-y-1" {...props} />
+    ),
+    h1: ({ node, ...props }) => (
+      <h1 className="text-lg font-bold text-zinc-800 m-0" {...props} />
+    ),
+  };
+
 
   const scrollToBottom = React.useCallback(() => {
     const container = chatBodyRef?.current;
@@ -728,7 +702,7 @@ export default function ChatSection({
                             <IoDownloadOutline size={15} />
                           </button>
                         </div>
-                        <ReactMarkdown className="relative z-10 space-y-1 break-words" components={markdownComponents}>{messageText || ""}</ReactMarkdown>
+                        <ReactMarkdown remarkPlugins={[remarkGfm]} className="relative z-10 space-y-1 break-words" components={markdownComponents}>{sanitizeMarkdownContent(messageText) || ""}</ReactMarkdown>
                       </div>
                     </div>
                   </React.Fragment>
@@ -750,7 +724,7 @@ export default function ChatSection({
                             </button>
                           )}
                         </div>
-                        <ReactMarkdown className="markdown-body space-y-2 break-words" components={markdownComponents}>{messageText || ""}</ReactMarkdown>
+                        <ReactMarkdown remarkPlugins={[remarkGfm]} className="markdown-body space-y-2 break-words" components={markdownComponents}>{sanitizeMarkdownContent(messageText) || ""}</ReactMarkdown>
                         {isStreaming && <span className="ml-2 inline-block animate-pulse text-[rgba(242,60,57,0.6)]">...</span>}
                         {isPendingMessage && !isStreaming && <span className="mt-1 block text-[10px] text-zinc-400">Sending…</span>}
                       </div>
@@ -904,7 +878,7 @@ export default function ChatSection({
                     <IoStopCircleOutline size={18} />
                   </button>
                 ) : (
-                  <div style={{display: "flex", gap: "10px"}}>
+                  <div style={{ display: "flex", gap: "10px" }}>
                     <button
                       type="button"
                       onClick={handleSend}
@@ -913,9 +887,8 @@ export default function ChatSection({
                     >
                       <IoSend size={16} />
                     </button>
-                    
                     <div className="mb-3 flex items-center gap-2">
-                      
+
                       {modulesToShow.map((m) => {
                         const isActive = m.id === normalizedCurrentAssistantId;
                         return (
@@ -938,6 +911,7 @@ export default function ChatSection({
                         );
                       })}
                     </div>
+
                   </div>
                 )}
               </div>

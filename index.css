@@ -25,3 +25,121 @@
     transform: translateY(0);
   }
 }
+
+/* Markdown rendering improvements */
+.prose {
+  color: #0f172a; /* slate-900 */
+  line-height: 1.65;
+  font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial;
+}
+.prose h1, .prose h2, .prose h3, .prose h4 {
+  color: #0b1220; /* slightly darker */
+  margin-top: 1em;
+  margin-bottom: 0.35em; /* reduced gap between heading and content */
+  line-height: 1.18;
+}
+.prose h1 { font-size: 1.75rem; font-weight: 700; }
+.prose h2 { font-size: 1.375rem; font-weight: 700; }
+.prose h3 { font-size: 1.125rem; font-weight: 600; }
+.prose p { margin-bottom: 0; }
+
+/* make sure lists and block elements get a bit more breathing room */
+.prose > *:not(:first-child) { margin-top: 0.45em; }
+
+/* reduce extra gap when a heading is followed by block elements like lists or paragraphs */
+.prose h1 + p, .prose h2 + p, .prose h3 + p, .prose h4 + p,
+.prose h1 + ul, .prose h2 + ul, .prose h3 + ul, .prose h4 + ul,
+.prose h1 + ol, .prose h2 + ol, .prose h3 + ol, .prose h4 + ol,
+.prose h1 + table, .prose h2 + table, .prose h3 + table, .prose h4 + table {
+  margin-top: 0.12em; /* tighten the gap immediately after headings */
+}
+
+/* lists: remove excessive top/bottom margins and tighten bullet spacing */
+.prose ul, .prose ol {
+  margin-top: 0.15rem;
+  margin-bottom: 0.65em;
+  padding-left: 0.9rem; /* slightly less indent for chat layout */
+}
+.prose li { margin-bottom: 0.35rem; }
+
+/* remove stray small dots that sometimes appear when markdown renderers add empty list markers */
+.prose li:empty { display: none; }
+
+.prose a { color: var(--brand); text-decoration: underline; text-underline-offset: 3px; }
+.prose a:hover { color: var(--brand-dark); }
+
+.prose code {
+  background: #f8fafc; /* slate-50 */
+  border-radius: 4px;
+  padding: 0.125rem 0.25rem;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, "Roboto Mono", "Courier New", monospace;
+  font-size: 0.9em;
+}
+
+.prose pre {
+  background: #0b1220; /* dark background for blocks */
+  color: #e6edf3;
+  padding: 1rem;
+  border-radius: 8px;
+  overflow: auto;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, "Roboto Mono", monospace;
+  font-size: 0.9rem;
+  box-shadow: 0 6px 18px rgba(11,18,32,0.08);
+}
+
+.prose blockquote {
+  border-left: 4px solid var(--brand);
+  background: #fff5f4; /* brand-lighter */
+  padding: 0.6rem 0.9rem;
+  margin: 0.75rem 0;
+  color: #1f2937;
+  border-radius: 4px;
+}
+
+.prose ul, .prose ol { padding-left: 1.25rem; margin-bottom: 0.85em; }
+.prose li { margin-bottom: 0.35rem; }
+
+.prose table {
+  width: 100%;
+  border-collapse: collapse;
+  margin-bottom: 1rem;
+}
+.prose th, .prose td {
+  border: 1px solid #e6eef7;
+  padding: 0.5rem 0.75rem;
+  text-align: left;
+}
+.prose thead th {
+  background: #f1f5f9;
+  font-weight: 600;
+}
+
+.prose img { max-width: 100%; border-radius: 6px; }
+
+/* When prose is used inside narrow chat bubbles, reduce left offset so bullets align with heading */
+/* allow lists to align better inside tight containers (no extra rules needed here) */
+
+/* Tweak ordered list number alignment */
+.prose ol { counter-reset: item; list-style-position: inside; }
+.prose ol li { display: list-item; }
+.prose ol li::marker { font-weight: 600; color: #0f172a; }
+
+/* Keep the first paragraph inside a list item inline with the marker */
+.prose li > p {
+  display: inline; /* keep marker and paragraph on same line when short */
+  margin: 0; /* remove paragraph top margin inside li */
+}
+
+/* If a list item contains block children (tables, pre, div), they should remain block-level */
+.prose li > :not(p) {
+  display: block;
+}
+
+/* small responsive tweak */
+@media (prefers-color-scheme: dark) {
+  .prose { color: #e6eef7; }
+  .prose a { color: #ffb4b2; }
+  .prose pre { background: #071022; }
+  .prose code { background: rgba(255,255,255,0.03); }
+  .prose thead th { background: rgba(255,255,255,0.03); }
+}

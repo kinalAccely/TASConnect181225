@@ -1,5 +1,6 @@
 import React from "react";
 import ReactMarkdown from "react-markdown";
+import remarkGfm from 'remark-gfm';
 const SANDBOX_HOST = import.meta.env.VITE_SANDBOX_HOST ?? undefined;
 import {
   IoSend,
@@ -284,6 +285,14 @@ const resolveMessageText = (message) => {
   }
 
   return segments.join("\n\n");
+};
+
+// Remove stray literal bullets that sometimes appear inside list items
+const sanitizeMarkdownContent = (text) => {
+  if (typeof text !== 'string') return text ?? '';
+  let s = text.replace(/\r\n/g, '\n');
+  s = s.replace(/(^|\n)([ \t]*([-*+]|\d+\.)\s*)•\s*/g, '$1$2');
+  return s;
 };
 
 export default function ChatSection({
@@ -659,7 +668,7 @@ export default function ChatSection({
       <div className="relative flex h-full min-h-0 flex-col overflow-hidden rounded-3xl border border-zinc-200 bg-white shadow-[0_22px_48px_rgba(17,17,17,0.08)] backdrop-blur-md">
         <div
           ref={chatBodyRef}
-          className={`flex-1 space-y-2 overflow-y-auto px-4 py-4 text-[11px] text-zinc-500 transition-all duration-300 ease-out ${isTransitioning ? "opacity-60 blur-[0.3px]" : "opacity-100"} min-h-0`}
+          className={`flex-1 overflow-y-auto px-4 py-4 text-[11px] text-zinc-500 transition-all duration-300 ease-out ${isTransitioning ? "opacity-60 blur-[0.3px]" : "opacity-100"} min-h-0`}
         >
           <>
             {displayedMessages.length === 0 && (
@@ -791,12 +800,22 @@ export default function ChatSection({
                           <IoDownloadOutline size={15} />
                         </button>
                       </div>
-                      <ReactMarkdown
-                        className="relative z-10 space-y-1 break-words"
-                        components={markdownComponents}
-                      >
-                        {messageText || ""}
-                      </ReactMarkdown>
+                      <div className="prose relative z-10 break-words">
+                        <ReactMarkdown
+                          remarkPlugins={[remarkGfm]}
+                          className="relative z-10 space-y-1 break-words"
+                          components={{
+                            li: ({ node, ...props }) => {
+                              const text = (node && node.children && node.children.map(c => c.value || '').join('').trim()) || '';
+                              if (!text) return null;
+                              return React.createElement('li', props);
+                            },
+                            ...markdownComponents,
+                          }}
+                        >
+                          {sanitizeMarkdownContent(messageText) || ""}
+                        </ReactMarkdown>
+                      </div>
                     </div>
                   </div>
                 );
@@ -873,12 +892,22 @@ export default function ChatSection({
                           </button>
                         )}
                       </div>
-                      <ReactMarkdown
-                        className="markdown-body space-y-2 break-words"
-                        components={markdownComponents}
-                      >
-                        {messageText || ""}
-                      </ReactMarkdown>
+                      <div className="prose markdown-body break-words">
+                        <ReactMarkdown
+                          remarkPlugins={[remarkGfm]}
+                          className="space-y-2"
+                          components={{
+                            li: ({ node, ...props }) => {
+                              const text = (node && node.children && node.children.map(c => c.value || '').join('').trim()) || '';
+                              if (!text) return null;
+                              return React.createElement('li', props);
+                            },
+                            ...markdownComponents,
+                          }}
+                        >
+                          {sanitizeMarkdownContent(messageText) || ""}
+                        </ReactMarkdown>
+                      </div>
                       {isStreaming && (
                         <span className="ml-2 inline-block animate-pulse text-[rgba(242,60,57,0.6)]">...</span>
                       )}

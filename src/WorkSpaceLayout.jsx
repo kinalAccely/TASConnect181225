@@ -1404,6 +1404,21 @@ export default function workSpaceLayout({ onNavigate, chatId }) {
       if (!message || typeof message !== "object") {
         return;
       }
+      // If the message carries explicit tool_result(s), surface them as tool outputs
+      try {
+        const explicitResults = [];
+        if (message.tool_result) explicitResults.push(message.tool_result);
+        if (Array.isArray(message.tool_results)) explicitResults.push(...message.tool_results);
+        if (message.toolResult) explicitResults.push(message.toolResult);
+        if (Array.isArray(message.toolResults)) explicitResults.push(...message.toolResults);
+        if (explicitResults.length > 0) {
+          explicitResults.forEach((res) => {
+            if (res) appendToolOutputs(res);
+          });
+        }
+      } catch (e) {
+        // non-fatal
+      }
       const directToolCalls = [
         ...(Array.isArray(message.tool_calls) ? message.tool_calls : []),
         ...(Array.isArray(message.additional_kwargs?.tool_calls)
