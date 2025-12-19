@@ -545,27 +545,42 @@ export default function ChatSection({
     if (!Array.isArray(messages)) {
       return [];
     }
+
     return messages
       .map((msg) => {
-        if (!msg) {
-          return null;
-        }
+        if (!msg) return null;
+
         const role = resolveRole(msg);
         const msgType = msg.type ?? msg.role;
-        const text = resolveMessageText(msg);
+        const isTrainingGraph =
+          msg.assistant_id === "training_module_graph";
+
+        // ❌ ignore tool messages
         if (msgType === "tool" || msgType === "tool_calls") {
           return null;
         }
-        if (
-          text.trim().toLowerCase() === "tool_calls" ||
-          (role !== "user" && !text.trim())
-        ) {
+
+        // ❌ training_module_graph assistant must have module
+        if (isTrainingGraph && role === "assistant" && !msg.module) {
           return null;
         }
+
+        // ✅ ALWAYS resolve to STRING
+        const text =
+          isTrainingGraph && role === "assistant"
+            ? extractModuleText(msg.module) // ✅ IMPORTANT
+            : resolveMessageText(msg);
+
+        if (!text?.trim()) {
+          return null;
+        }
+
         return { ...msg, role, text };
       })
       .filter(Boolean);
   }, [messages]);
+
+
 
   const timelineSteps = React.useMemo(() => {
     if (stageHistory.length > 0) {
@@ -668,6 +683,7 @@ export default function ChatSection({
                 msg.raw?.module_output,
                 msg.raw?.moduleResult,
                 msg.raw?.modules,
+                msg.raw?.canvas,
               ];
               const hasModuleData = moduleCandidates.some((candidate) => {
                 if (!candidate) return false;
@@ -679,7 +695,14 @@ export default function ChatSection({
               const forceModuleCanvas = Boolean(
                 msg.generate_module ?? msg.metadata?.generate_module ?? msg.raw?.generate_module ?? msg.raw?.metadata?.generate_module,
               );
-              const showModuleCanvas = !isUser && (hasModuleData || forceModuleCanvas);
+              // console.log(currentAssistantId)
+              const isTrainingGraph =
+                currentAssistantId === "training_module_graph";
+              
+              const showAssistantMessage = ((isTrainingGraph && isUser) || !isTrainingGraph);
+
+              const showModuleCanvas = ((!isUser && isTrainingGraph && !forceModuleCanvas));
+
               const messageText = typeof msg.text === "string" ? msg.text : "";
               const hasText = messageText.trim().length > 0;
               const messageKey = typeof msg.id === "string" || typeof msg.id === "number" ? msg.id : `${msg.role ?? "message"}-${idx}`;
@@ -692,7 +715,7 @@ export default function ChatSection({
                 return (
                   <React.Fragment key={messageKey}>
                     <div style={{ display: "flex", justifyContent: "center" }}>
-                      <div id={`canvas_${idx}`} style={{ width: "700px" }} className="relative max-h-[400px] overflow-auto rounded-xl bg-zinc-50 z px-4 py-4 text-[11.5px] leading-relaxed text-zinc-600 shadow-[inset_0_2px_12px_rgba(242,60,57,0.12)]">
+                      <div id={`canvas_${idx}`} style={{ width: "full" }} className="relative max-h-[400px] overflow-auto rounded-xl bg-zinc-50 z px-4 py-4 text-[11.5px] leading-relaxed text-zinc-600 shadow-[inset_0_2px_12px_rgba(242,60,57,0.12)]">
                         <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_top,rgba(242,60,57,0.12),transparent_60%)]" />
                         <div className="sticky top-0 z-20 ml-auto flex w-fit justify-end gap-2">
                           <button onClick={() => handleCanvasCopy(idx)} className="flex h-8 w-8 items-center justify-center rounded-xl border border-zinc-200 bg-white text-zinc-600 shadow-sm transition hover:border-[var(--brand-light)] hover:text-[var(--brand)]" title="Copy to clipboard" aria-label="Copy">
@@ -709,30 +732,34 @@ export default function ChatSection({
                 );
               }
 
-              return (
-                <React.Fragment key={messageKey}>
-                  <div className={`flex w-full ${alignmentClass}`}>
-                    <div className={`group flex max-w-[80%] flex-col gap-1 ${isUser ? "items-start" : "items-end"}`}>
-                      <div className={`relative ${bubbleBase} ${bubbleClass} text-[11.5px]`}>
-                        <div className="pointer-events-none absolute bottom-1.5 right-1.5 z-10 flex gap-2 opacity-0 transition group-hover:opacity-100">
-                          <button type="button" onClick={() => handleCopyMessage(messageText, messageKey)} className="pointer-events-auto flex h-6 w-6 items-center justify-center rounded-full border border-zinc-200 bg-white/95 text-zinc-500 shadow-sm transition hover:border-[var(--brand-light)] hover:text-[var(--brand)]" aria-label="Copy message" title="Copy message">
-                            {copiedMessageKey === messageKey ? <IoCheckmark size={12} /> : <IoCopyOutline size={12} />}
-                          </button>
-                          {canEdit && (
-                            <button type="button" onClick={() => onInputChange(messageText)} className="pointer-events-auto flex h-6 w-6 items-center justify-center rounded-full border border-zinc-200 bg-white/95 text-zinc-500 shadow-sm transition hover:border-[var(--brand-light)] hover:text-[var(--brand)]" aria-label="Edit message" title="Edit message" disabled={isLoading}>
-                              <IoCreateOutline size={12} />
+              // Always render assistant/user message bubble when module canvas is not shown.
+              // This ensures previous canvases remain in the DOM instead of being removed by
+              // an early return that skips rendering assistant messages.
+              if (showAssistantMessage) {
+                return (
+                  <React.Fragment key={messageKey}>
+                    <div className={`flex w-full ${alignmentClass}`}>
+                      <div className={`group flex max-w-[full] flex-col gap-1 ${isUser ? "items-start" : "items-end"}`}>
+                        <div className={`relative ${bubbleBase} ${bubbleClass} text-[11.5px]`}>
+                          <div className="pointer-events-none absolute bottom-1.5 right-1.5 z-10 flex gap-2 opacity-0 transition group-hover:opacity-100">
+                            <button type="button" onClick={() => handleCopyMessage(messageText, messageKey)} className="pointer-events-auto flex h-6 w-6 items-center justify-center rounded-full border border-zinc-200 bg-white/95 text-zinc-500 shadow-sm transition hover:border-[var(--brand-light)] hover:text-[var(--brand)]" aria-label="Copy message" title="Copy message">
+                              {copiedMessageKey === messageKey ? <IoCheckmark size={12} /> : <IoCopyOutline size={12} />}
                             </button>
-                          )}
+                            {canEdit && (
+                              <button type="button" onClick={() => onInputChange(messageText)} className="pointer-events-auto flex h-6 w-6 items-center justify-center rounded-full border border-zinc-200 bg-white/95 text-zinc-500 shadow-sm transition hover:border-[var(--brand-light)] hover:text-[var(--brand)]" aria-label="Edit message" title="Edit message" disabled={isLoading}>
+                                <IoCreateOutline size={12} />
+                              </button>
+                            )}
+                          </div>
+                          <ReactMarkdown remarkPlugins={[remarkGfm]} className="markdown-body space-y-2 break-words" components={markdownComponents}>{sanitizeMarkdownContent(messageText) || ""}</ReactMarkdown>
+                          {isStreaming && <span className="ml-2 inline-block animate-pulse text-[rgba(242,60,57,0.6)]">...</span>}
+                          {isPendingMessage && !isStreaming && <span className="mt-1 block text-[10px] text-zinc-400">Sending…</span>}
                         </div>
-                        <ReactMarkdown remarkPlugins={[remarkGfm]} className="markdown-body space-y-2 break-words" components={markdownComponents}>{sanitizeMarkdownContent(messageText) || ""}</ReactMarkdown>
-                        {isStreaming && <span className="ml-2 inline-block animate-pulse text-[rgba(242,60,57,0.6)]">...</span>}
-                        {isPendingMessage && !isStreaming && <span className="mt-1 block text-[10px] text-zinc-400">Sending…</span>}
                       </div>
                     </div>
-                  </div>
-
-                </React.Fragment>
-              );
+                  </React.Fragment>
+                );
+              }
             })}
 
             {hasSandboxPreview && (
@@ -845,13 +872,6 @@ export default function ChatSection({
                   </div>
                 </div>
               )}
-              {/* Selected module bar (shows current assistant/module) */}
-              {normalizedCurrentAssistantId && (() => {
-                // icon-only module selector: chat, training, live_demo
-                const activeId = normalizedCurrentAssistantId;
-
-
-              })()}
               <textarea
                 value={input}
                 onChange={(event) => onInputChange(event.target.value)}

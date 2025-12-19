@@ -1058,11 +1058,15 @@ export default function workSpaceLayout({ onNavigate, chatId }) {
       return baseMessagesCopy;
     }
 
-    const alreadyPresent = baseMessagesCopy.some(
-      (msg) =>
-        msg?.__source === "canvas-payload" ||
-        (msg?.raw?.canvas && msg.text === moduleText),
-    );
+    // Only consider it already present when a previous canvas entry has the same rendered text.
+    // Previously this flagged any `__source === 'canvas-payload'` as duplicate which prevented
+    // appending multiple distinct canvases. Now we only dedupe identical payloads.
+    const alreadyPresent = baseMessagesCopy.some((msg) => {
+      if (!msg) return false;
+      if (msg?.__source === "canvas-payload" && msg.text === moduleText) return true;
+      if (msg?.raw?.canvas && msg.text === moduleText) return true;
+      return false;
+    });
 
     if (alreadyPresent) {
       return baseMessagesCopy;
@@ -1200,13 +1204,17 @@ export default function workSpaceLayout({ onNavigate, chatId }) {
     }
     triggerThreadTransition();
     setActiveThreadId(null);
+  // Reset assistant to default when starting a fresh chat
+  setAssistantId(DEFAULT_ASSISTANT_ID);
     handleInputChange("");
     setSources([]);
+  // Reset right-side panel to open when starting a new chat
+  setIsRightCollapsed(false);
     setRefreshKey((prev) => prev + 1);
     resetToolTracking();
     setStreamError(null);
     setShowAssistantChooser(false);
-    lastThreadAssistantRef.current = { threadId: null, assistantId: null };
+  lastThreadAssistantRef.current = { threadId: null, assistantId: DEFAULT_ASSISTANT_ID };
     if (typeof onNavigate === "function") {
       onNavigate("/chat");
     }
