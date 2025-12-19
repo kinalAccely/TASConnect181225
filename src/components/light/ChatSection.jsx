@@ -1,941 +1,241 @@
-import React from "react";
+import React, { useState, useMemo, useRef, useEffect } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from 'remark-gfm';
-const SANDBOX_HOST = import.meta.env.VITE_SANDBOX_HOST ?? undefined;
 import {
   IoSend,
   IoCopyOutline,
-  IoDownloadOutline,
   IoCheckmark,
-  IoCreateOutline,
-  IoArrowDownCircleOutline,
   IoStopCircleOutline,
+  IoCloseCircle,
+  IoLayersOutline,
+  IoDownloadOutline,
+  IoChatbubbleEllipsesOutline,
+  IoPlayCircleOutline,
+  IoSchoolOutline,
+  IoSparklesOutline,
 } from "react-icons/io5";
-
-const TEXTUAL_CONTENT_TYPES = new Set([
-  "text",
-  "output_text",
-  "ai",
-  "assistant",
-  "response",
-  "module",
-]);
-
-// const DEFAULT_LIVE_DEMO_STEPS = [
-//   "Preparing environment",
-//   "Launching preview",
-//   "Streaming workflow",
-//   "Summarising next steps",
-// ];
-
-const DEFAULT_TIMELINE_STEPS = [];
-
-const resolveRole = (message) => {
-  if (!message) {
-    return "assistant";
-  }
-  if (message.role) {
-    return message.role;
-  }
-  if (message.type === "human" || message.type === "user") {
-    return "user";
-  }
-  if (message.type === "system") {
-    return "system";
-  }
-  if (message.type === "tool" || message.type === "tool_message") {
-    return "tool";
-  }
-  return "assistant";
-};
-
-const extractTextFromContent = (content) => {
-  if (!content) {
-    return "";
-  }
-
-  if (typeof content === "string") {
-    return content;
-  }
-
-  if (Array.isArray(content)) {
-    return content
-      .map((part) => {
-        if (!part) {
-          return "";
-        }
-        if (typeof part === "string") {
-          return part;
-        }
-        if (
-          part.type &&
-          !TEXTUAL_CONTENT_TYPES.has(part.type) &&
-          !part.type.includes("text")
-        ) {
-          return "";
-        }
-        if (typeof part.text === "string") {
-          return part.text;
-        }
-        if (Array.isArray(part.text)) {
-          return part.text.filter(Boolean).join("");
-        }
-        if (typeof part.value === "string") {
-          return part.value;
-        }
-        if (typeof part.content === "string") {
-          return part.content;
-        }
-        if (
-          typeof part?.data?.content === "string" &&
-          part.type?.includes("text")
-        ) {
-          return part.data.content;
-        }
-        return "";
-      })
-      .join("");
-  }
-
-  if (typeof content === "object") {
-    if (typeof content.text === "string") {
-      return content.text;
-    }
-    if (Array.isArray(content.text)) {
-      return content.text.filter(Boolean).join("");
-    }
-    if (typeof content.value === "string") {
-      return content.value;
-    }
-    if (typeof content.content === "string") {
-      return content.content;
-    }
-  }
-
-  return "";
-};
-
-const extractModuleText = (modulePayload) => {
-  if (!modulePayload) {
-    return "";
-  }
-
-  const visited = new WeakSet();
-
-  const traverse = (value) => {
-    if (value == null) {
-      return "";
-    }
-    if (typeof value === "string") {
-      return value;
-    }
-    if (typeof value === "number" || typeof value === "boolean") {
-      return String(value);
-    }
-    if (Array.isArray(value)) {
-      return value
-        .map((item) => traverse(item))
-        .filter(Boolean)
-        .join("\n");
-    }
-    if (typeof value === "object") {
-      if (visited.has(value)) {
-        return "";
-      }
-      visited.add(value);
-
-      if (typeof value.text === "string") {
-        return value.text;
-      }
-      if (Array.isArray(value.text)) {
-        return value.text.filter(Boolean).join("");
-      }
-
-      if (value.content !== undefined) {
-        const contentText =
-          typeof value.content === "string"
-            ? value.content
-            : Array.isArray(value.content)
-              ? value.content
-                .map((item) =>
-                  typeof item === "string" ? item : traverse(item),
-                )
-                .filter(Boolean)
-                .join("")
-              : traverse(value.content);
-        if (contentText) {
-          return contentText;
-        }
-      }
-
-      if (value.value !== undefined) {
-        const valueText = traverse(value.value);
-        if (valueText) {
-          return valueText;
-        }
-      }
-
-      if (Array.isArray(value.messages)) {
-        const messagesText = value.messages
-          .map((message) => {
-            if (!message) {
-              return "";
-            }
-            if (typeof message === "string") {
-              return message;
-            }
-            if (typeof message.text === "string") {
-              return message.text;
-            }
-            if (Array.isArray(message.text)) {
-              return message.text.filter(Boolean).join("");
-            }
-            if (message.content) {
-              return traverse(message.content);
-            }
-            return "";
-          })
-          .filter(Boolean)
-          .join("\n");
-        if (messagesText) {
-          return messagesText;
-        }
-      }
-
-      const merged = Object.values(value)
-        .map((entry) => traverse(entry))
-        .filter(Boolean)
-        .join("\n");
-      return merged;
-    }
-
-    return "";
-  };
-
-  return traverse(modulePayload).trim();
-};
-
-const resolveMessageText = (message) => {
-  if (!message) {
-    return "";
-  }
-
-  const uniqueSegments = new Set();
-  const segments = [];
-  const pushSegment = (value) => {
-    if (typeof value !== "string") {
-      return;
-    }
-    const trimmed = value.trim();
-    if (!trimmed) {
-      return;
-    }
-    if (uniqueSegments.has(trimmed)) {
-      return;
-    }
-    uniqueSegments.add(trimmed);
-    segments.push(trimmed);
-  };
-
-  if (typeof message.text === "string" && message.text.length > 0) {
-    pushSegment(message.text);
-  }
-  if (typeof message.content === "string") {
-    pushSegment(message.content);
-  } else {
-    const contentText = extractTextFromContent(message.content);
-    if (contentText) {
-      pushSegment(contentText);
-    }
-  }
-
-  const moduleCandidates = [
-    message.module,
-    message.module_output,
-    message.moduleOutput,
-    message.moduleResult,
-    message.modules,
-    message.raw?.module,
-    message.raw?.module_output,
-    message.raw?.moduleResult,
-    message.raw?.modules,
-  ];
-
-  moduleCandidates.forEach((candidate) => {
-    const moduleText = extractModuleText(candidate);
-    if (moduleText) {
-      pushSegment(moduleText);
-    }
-  });
-
-  if (typeof message.value === "string") {
-    pushSegment(message.value);
-  }
-
-  if (segments.length === 0) {
-    const fallbackModule = moduleCandidates.find(Boolean);
-    if (fallbackModule) {
-      try {
-        pushSegment(
-          `\`\`\`json\n${JSON.stringify(fallbackModule, null, 2)}\n\`\`\``,
-        );
-      } catch (err) {
-        pushSegment(String(fallbackModule));
-      }
-    }
-  }
-
-  return segments.join("\n\n");
-};
-
-// Remove stray literal bullets that sometimes appear inside list items (e.g. "- • ITEM")
-const sanitizeMarkdownContent = (text) => {
-  if (typeof text !== 'string') return text ?? '';
-  // Normalize CRLF -> LF
-  let s = text.replace(/\r\n/g, '\n');
-  // Remove a literal bullet '•' when it immediately follows a markdown list marker
-  // e.g. "- • item" or "1. • item" -> "- item" / "1. item"
-  s = s.replace(/(^|\n)([ \t]*([-*+]|\d+\.)\s*)•\s*/g, '$1$2');
-  return s;
-};
 
 export default function ChatSection({
   chatBodyRef,
   input,
   isLoading,
-  messages,
-  sandboxUrl,
-  streamError,
-  stage,
-  stageProgress,
-  onCopy,
-  onDownload,
+  messages = [],
   onInputChange,
   onSend,
   onStop,
-  onTimelineStepsChange,
-  assistantSuggestions = [],
-  currentAssistantId,
+  onEditMessage,
   onAssistantSuggestionSelect,
-  shouldShowAssistantSuggestions = false,
-  isTransitioning = false,
+  threadId,
+  assistantId: propsAssistantId,
+  currentAssistantId
 }) {
-  const [stageHistory, setStageHistory] = React.useState([]);
-  const prevStageRef = React.useRef();
-  const [isAtBottom, setIsAtBottom] = React.useState(true);
-  const [copiedMessageKey, setCopiedMessageKey] = React.useState(null);
-  const copyTimeoutRef = React.useRef();
-  const suggestionItems = React.useMemo(() => {
-    if (!Array.isArray(assistantSuggestions) || assistantSuggestions.length === 0) {
-      return [];
-    }
-    const seenIds = new Set();
-    return assistantSuggestions
-      .map((option) => {
-        if (!option) {
-          return null;
-        }
-        if (typeof option === "string") {
-          const normalizedId = option.trim();
-          if (!normalizedId || seenIds.has(normalizedId)) {
-            return null;
-          }
-          seenIds.add(normalizedId);
-          return {
-            id: normalizedId,
-            label: normalizedId,
-            description: "",
-          };
-        }
-        const rawId =
-          typeof option.id === "string"
-            ? option.id
-            : typeof option.value === "string"
-              ? option.value
-              : "";
-        const normalizedId = rawId.trim();
-        if (!normalizedId || seenIds.has(normalizedId)) {
-          return null;
-        }
-        seenIds.add(normalizedId);
-        const label =
-          typeof option.label === "string" && option.label.trim().length > 0
-            ? option.label.trim()
-            : typeof option.title === "string" && option.title.trim().length > 0
-              ? option.title.trim()
-              : normalizedId;
-        const description =
-          typeof option.description === "string" && option.description.trim().length > 0
-            ? option.description.trim()
-            : typeof option.subtitle === "string" && option.subtitle.trim().length > 0
-              ? option.subtitle.trim()
-              : "";
-        return {
-          ...option,
-          id: normalizedId,
-          label,
-          description,
-        };
-      })
-      .filter(Boolean);
-  }, [assistantSuggestions]);
-  const normalizedCurrentAssistantId =
-    typeof currentAssistantId === "string" ? currentAssistantId.trim() : "";
-  const hasAssistantSuggestions =
-    shouldShowAssistantSuggestions && suggestionItems.length > 0;
-  const handleSuggestionClick = React.useCallback(
-    (option) => {
-      if (typeof onAssistantSuggestionSelect === "function") {
-        onAssistantSuggestionSelect(option);
-      }
-    },
-    [onAssistantSuggestionSelect],
-  );
-  const normalizedSandboxUrl = React.useMemo(() => {
-    if (typeof sandboxUrl !== "string") {
-      return undefined;
-    }
-    const trimmed = sandboxUrl.trim();
-    if (trimmed.length === 0) return undefined;
-    // If this looks like a direct video URL, return it unchanged (preserve proto)
-    if (/\.(mp4|webm|ogg|mov|m3u8|mkv)(\?.*)?$/i.test(trimmed) || /^data:video\//i.test(trimmed)) {
-      return /^https?:\/\//i.test(trimmed) ? trimmed : `http://${trimmed}`;
-    }
-    try {
-      const hasProto = /^https?:\/\//i.test(trimmed);
-      const urlObj = new URL(hasProto ? trimmed : `http://${trimmed}`);
-      if (
-        urlObj.hostname === "localhost" &&
-        typeof SANDBOX_HOST === "string" &&
-        SANDBOX_HOST.trim().length > 0
-      ) {
-        urlObj.hostname = SANDBOX_HOST;
-        urlObj.protocol = "http:";
-      }
-      return urlObj.toString();
-    } catch (e) {
-      const replaced =
-        typeof SANDBOX_HOST === "string" && SANDBOX_HOST.trim().length > 0
-          ? trimmed.replace(/(^|\b)localhost\b/gi, SANDBOX_HOST)
-          : trimmed;
-      return /^https?:\/\//i.test(replaced) ? replaced : `http://${replaced}`;
-    }
-  }, [sandboxUrl]);
-  const isVideoPreview = Boolean(
-    typeof normalizedSandboxUrl === "string" && /\.(mp4|webm|ogg|mov|m3u8|mkv)(\?.*)?$/i.test(normalizedSandboxUrl),
-  );
-  const hasSandboxPreview = Boolean(normalizedSandboxUrl);
-
-  const markdownComponents = {
-    p: ({ node, ...props }) => (
-      <p className="m-0" {...props} />
-    ),
-    ul: ({ node, ...props }) => (
-      <ul className="ml-4 list-disc space-y-1" {...props} />
-    ),
-    ol: ({ node, ...props }) => (
-      <ol className="ml-4 list-decimal space-y-1" {...props} />
-    ),
-    h1: ({ node, ...props }) => (
-      <h1 className="text-lg font-bold text-zinc-800 m-0" {...props} />
-    ),
-  };
-
-
-  const scrollToBottom = React.useCallback(() => {
-    const container = chatBodyRef?.current;
-    if (!container) {
-      return;
-    }
-    container.scrollTo({
-      top: container.scrollHeight,
-      behavior: "smooth",
-    });
-  }, [chatBodyRef]);
-
-  const handleSend = () => {
-    if (!isLoading) {
-      onSend();
-    }
-  };
-
-  const handleStop = React.useCallback(() => {
-    if (typeof onStop === "function") {
-      onStop();
-    }
-  }, [onStop]);
-
-  const handleCopyMessage = React.useCallback((text, key) => {
-    if (!text) {
-      return;
-    }
-    navigator.clipboard
-      .writeText(text)
-      .then(() => {
-        setCopiedMessageKey(key);
-        if (copyTimeoutRef.current) {
-          clearTimeout(copyTimeoutRef.current);
-        }
-        copyTimeoutRef.current = setTimeout(() => {
-          setCopiedMessageKey(null);
-          copyTimeoutRef.current = null;
-        }, 5000);
-      })
-      .catch((err) => {
-        console.error("Failed to copy message:", err);
-      });
-  }, []);
-
-  const handleCanvasCopy = React.useCallback(
-    (index) => {
-      if (typeof onCopy !== "function") {
-        return;
-      }
-      onCopy(index);
-      setCopiedMessageKey(`canvas-${index}`);
-      if (copyTimeoutRef.current) {
-        clearTimeout(copyTimeoutRef.current);
-      }
-      copyTimeoutRef.current = setTimeout(() => {
-        setCopiedMessageKey(null);
-        copyTimeoutRef.current = null;
-      }, 5000);
-    },
-    [onCopy],
-  );
-
-  React.useEffect(() => {
-    if (isTransitioning) {
-      setStageHistory([]);
-      prevStageRef.current = undefined;
-      scrollToBottom();
-    }
-  }, [isTransitioning, scrollToBottom]);
-
-  React.useEffect(() => {
-    if (!stage || stage.trim().length === 0) {
-      return;
-    }
-    const normalizedStage = stage.trim();
-    setStageHistory((prev) => {
-      if (prev.length > 0 && prev[prev.length - 1] === normalizedStage) {
-        return prev;
-      }
-      if (prev.includes(normalizedStage)) {
-        return prev;
-      }
-      return [...prev, normalizedStage];
-    });
-    prevStageRef.current = normalizedStage;
-  }, [stage]);
-
-  const normalizedStageProgress = React.useMemo(() => {
-    if (typeof stageProgress === "number" && Number.isFinite(stageProgress)) {
-      return Math.min(Math.max(stageProgress, 0), 100);
-    }
-    if (stageHistory.length === 0) {
-      return 0;
-    }
-    const fallbackProgress =
-      (stageHistory.length - 1) / Math.max(stageHistory.length, 1);
-    return Math.round(fallbackProgress * 100);
-  }, [stageProgress, stageHistory.length]);
-
-  const displayedMessages = React.useMemo(() => {
-    if (!Array.isArray(messages)) {
-      return [];
-    }
-
-    return messages
-      .map((msg) => {
-        if (!msg) return null;
-
-        const role = resolveRole(msg);
-        const msgType = msg.type ?? msg.role;
-        const isTrainingGraph =
-          msg.assistant_id === "training_module_graph";
-
-        // ❌ ignore tool messages
-        if (msgType === "tool" || msgType === "tool_calls") {
-          return null;
-        }
-
-        // ❌ training_module_graph assistant must have module
-        if (isTrainingGraph && role === "assistant" && !msg.module) {
-          return null;
-        }
-
-        // ✅ ALWAYS resolve to STRING
-        const text =
-          isTrainingGraph && role === "assistant"
-            ? extractModuleText(msg.module) // ✅ IMPORTANT
-            : resolveMessageText(msg);
-
-        if (!text?.trim()) {
-          return null;
-        }
-
-        return { ...msg, role, text };
-      })
-      .filter(Boolean);
-  }, [messages]);
-
-
-
-  const timelineSteps = React.useMemo(() => {
-    if (stageHistory.length > 0) {
-      return stageHistory;
-    }
-    return DEFAULT_TIMELINE_STEPS;
-  }, [stageHistory]);
-
-  React.useEffect(() => {
-    if (typeof onTimelineStepsChange !== "function") {
-      return;
-    }
-    onTimelineStepsChange(timelineSteps);
-  }, [timelineSteps, onTimelineStepsChange]);
-
-  React.useEffect(() => {
-    const container = chatBodyRef?.current;
-    if (!container) {
-      return;
-    }
-
-    const handleScroll = () => {
-      const { scrollTop, scrollHeight, clientHeight } = container;
-      const distanceFromBottom = scrollHeight - clientHeight - scrollTop;
-      setIsAtBottom(distanceFromBottom < 40);
-    };
-
-    container.addEventListener("scroll", handleScroll);
-    handleScroll();
-    return () => container.removeEventListener("scroll", handleScroll);
-  }, [chatBodyRef]);
-
-  React.useEffect(() => {
-    const container = chatBodyRef?.current;
-    if (!container) {
-      return;
-    }
-    const { scrollTop, scrollHeight, clientHeight } = container;
-    const nearBottom = scrollHeight - clientHeight - scrollTop < 80;
-    if (nearBottom) {
-      scrollToBottom();
-    }
-  }, [messages, scrollToBottom]);
-
-  React.useEffect(
-    () => () => {
-      if (copyTimeoutRef.current) {
-        clearTimeout(copyTimeoutRef.current);
-      }
-    },
-    [],
-  );
-
-  const modulesToShow = [
-    {
-      id: "chat", label: "Chat", icon: (
-        <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z" /></svg>
-      )
-    },
-    {
-      id: "training_module_graph", label: "Training", icon: (
-        <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="4" width="18" height="14" rx="2" ry="2" /><path d="M8 2v4" /><path d="M16 2v4" /></svg>
-      )
-    },
-    {
-      id: "live_demo", label: "Live Demo", icon: (
-        <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10" /><path d="M10 8l6 4-6 4z" /></svg>
-      )
-    },
+  const slashOptions = [
+    { id: "agent", label: "Chat", icon: <IoChatbubbleEllipsesOutline size={18} />, description: "Standard conversation mode" },
+    { id: "training_module_graph", label: "Training", icon: <IoSchoolOutline size={18} />, description: "Generate educational content" },
+    { id: "live_demo", label: "Live Demo", icon: <IoPlayCircleOutline size={18} />, description: "Interact with a live sandbox" },
   ];
 
+  useEffect(() => {
+    console.log(currentAssistantId)
+    const matched = slashOptions.find(opt => opt.id === currentAssistantId);
+    if (matched) {
+      setActiveModule(matched);
+    }
+  }, [currentAssistantId])
+
+  // Logic: Is this a clean new chat route with no existing ID?
+  const isNewChatRoute = useMemo(() => {
+    const pathSegments = window.location.pathname.split('/').filter(Boolean);
+    // Returns true only if the path is exactly "/chat" and no threadId prop is present
+    return pathSegments.length === 1 && pathSegments[0] === 'chat' && !threadId;
+  }, [window.location.pathname, threadId]);
+
+  const [activeModule, setActiveModule] = useState(() =>
+    isNewChatRoute ? slashOptions[0] : null
+  );
+
+  const [copiedMessageKey, setCopiedMessageKey] = useState(null);
+  const textareaRef = useRef(null);
+
+  useEffect(() => {
+    if (!isNewChatRoute && propsAssistantId) {
+      const matched = slashOptions.find(opt => opt.id === propsAssistantId);
+      if (matched) setActiveModule(matched);
+    }
+  }, [propsAssistantId, isNewChatRoute]);
+
+  const handleCopy = (text, key) => {
+    navigator.clipboard.writeText(text);
+    setCopiedMessageKey(key);
+    setTimeout(() => setCopiedMessageKey(null), 2000);
+  };
+
+  const triggerDownload = (msg) => {
+    const blob = new Blob([msg.text], { type: "text/markdown" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = `training_content_${new Date().getTime()}.md`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+  };
+
+  useEffect(() => {
+    if (textareaRef.current) {
+      textareaRef.current.style.height = 'auto';
+      textareaRef.current.style.height = `${Math.min(textareaRef.current.scrollHeight, 200)}px`;
+    }
+  }, [input]);
+
+  const showSlashMenu = isNewChatRoute && messages.length === 0 && input.startsWith("/");
+
+  const handleSelectModule = (module) => {
+    setActiveModule(module);
+    onAssistantSuggestionSelect?.(module);
+    onInputChange("");
+  };
+
+  const markdownComponents = {
+    p: ({ node, ...props }) => <p className="mb-3 last:mb-0 leading-relaxed" {...props} />,
+    ul: ({ node, ...props }) => <ul className="mb-3 ml-5 list-disc space-y-1" {...props} />,
+    ol: ({ node, ...props }) => <ol className="mb-3 ml-5 list-decimal space-y-1" {...props} />,
+    li: ({ node, ...props }) => <li className="pl-1" {...props} />,
+    strong: ({ node, ...props }) => <strong className="font-bold text-zinc-900" {...props} />,
+  };
+
   return (
-    <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-hidden">
-      <div className="relative flex h-full min-h-0 flex-col overflow-hidden rounded-3xl border border-zinc-200 bg-white shadow-[0_22px_48px_rgba(17,17,17,0.08)] backdrop-blur-md">
-        <div
-          ref={chatBodyRef}
-          className={`flex-1 space-y-2 overflow-y-auto px-4 py-4 text-[11px] text-zinc-500 transition-all duration-300 ease-out ${isTransitioning ? "opacity-60 blur-[0.3px]" : "opacity-100"} min-h-0`}
-        >
-          <>
-            {displayedMessages.length === 0 && (
-              <div className="rounded-3xl border border-dashed border-zinc-300 bg-zinc-50 px-5 py-6 text-center text-[11px] text-zinc-500">
-                Start by asking a question or switch modules to explore different stages of your flow.
+    <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-hidden bg-zinc-50">
+      <div className="relative flex h-full min-h-0 flex-col overflow-hidden rounded-3xl border border-zinc-200 bg-white shadow-xl">
+
+        <div ref={chatBodyRef} className="flex-1 space-y-6 overflow-y-auto px-6 py-6 scroll-smooth">
+
+          {/* WELCOME MESSAGE: Only shows on NEW route AND when message array is empty */}
+          {isNewChatRoute && messages.length === 0 && !isLoading && (
+            <div className="flex h-full flex-col items-center justify-center text-center px-4 animate-in fade-in zoom-in-95 duration-700">
+              <div className="mb-4 p-4 bg-zinc-50 rounded-full text-[var(--brand)]">
+                <IoSparklesOutline size={32} className="animate-pulse" />
               </div>
-            )
+              <h2 className="text-xl font-semibold text-zinc-800 mb-2">Start a new conversation</h2>
+              <p className="text-sm text-zinc-400 max-w-sm leading-relaxed">
+                Ask a question or type <span className="font-mono text-[var(--brand)] font-bold">/</span> to switch modes.
+              </p>
+            </div>
+          )}
+
+          {/* LOADING SKELETON: Show if it's an existing thread but no messages have loaded yet */}
+          {!isNewChatRoute && messages.length === 0 && isLoading && (
+            <div className="flex flex-col gap-4 p-4 animate-pulse">
+              <div className="h-10 bg-zinc-100 rounded-2xl w-2/3 self-start"></div>
+              <div className="h-10 bg-zinc-100 rounded-2xl w-1/2 self-end"></div>
+              <div className="h-32 bg-zinc-100 rounded-2xl w-full"></div>
+            </div>
+          )}
+
+          {messages.map((msg, idx) => {
+            const isUser = msg.role === "user";
+            const msgId = msg.id || `msg-${idx}`;
+            const currentMsgAssistantId = msg.assistant_id || propsAssistantId || activeModule?.id;
+            const isTrainingModule = currentMsgAssistantId === "training_module_graph";
+
+            if (isUser) {
+              return (
+                <div key={msgId} className="flex w-full justify-end">
+                  <div className="rounded-2xl border border-[var(--brand-light)] bg-[var(--brand-lighter)] px-4 py-3 text-[13px] text-zinc-800 shadow-sm">
+                    <p className="whitespace-pre-wrap">{msg.text}</p>
+                  </div>
+                </div>
+              );
             }
 
-            {/* sandbox iframe will be rendered after the last user message */}
-
-            {displayedMessages.map((msg, idx) => {
-              const isUser = msg.role === "user";
-              const isStreaming = Boolean(msg.isStreaming);
-              const isPendingMessage = Boolean(msg.isPending);
-              const moduleCandidates = [
-                msg.module,
-                msg.module_output,
-                msg.moduleOutput,
-                msg.moduleResult,
-                msg.modules,
-                msg.raw?.module,
-                msg.raw?.module_output,
-                msg.raw?.moduleResult,
-                msg.raw?.modules,
-                msg.raw?.canvas,
-              ];
-              const hasModuleData = moduleCandidates.some((candidate) => {
-                if (!candidate) return false;
-                if (typeof candidate === "string") return candidate.trim().length > 0;
-                if (Array.isArray(candidate)) return candidate.length > 0;
-                if (typeof candidate === "object") return Object.keys(candidate).length > 0;
-                return true;
-              });
-              const forceModuleCanvas = Boolean(
-                msg.generate_module ?? msg.metadata?.generate_module ?? msg.raw?.generate_module ?? msg.raw?.metadata?.generate_module,
-              );
-              // console.log(currentAssistantId)
-              const isTrainingGraph =
-                currentAssistantId === "training_module_graph";
-              
-              const showAssistantMessage = ((isTrainingGraph && isUser) || !isTrainingGraph);
-
-              const showModuleCanvas = ((!isUser && isTrainingGraph && !forceModuleCanvas));
-
-              const messageText = typeof msg.text === "string" ? msg.text : "";
-              const hasText = messageText.trim().length > 0;
-              const messageKey = typeof msg.id === "string" || typeof msg.id === "number" ? msg.id : `${msg.role ?? "message"}-${idx}`;
-
-              const bubbleBase = "max-w-[100%] whitespace-pre-wrap text-[12.5px] leading-sung pt-3 pb-3";
-              const bubbleClass = `rounded-xl border border-zinc-200 px-3 py-2 ${isUser ? "bg-[var(--brand-lighter)] text-[var(--brand-dark)] font-medium" : "bg-white text-zinc-700"} ${isPendingMessage ? "opacity-70" : ""}`;
-              const alignmentClass = isUser ? "justify-end" : "justify-start";
-              const canEdit = isUser && hasText && !isPendingMessage;
-              if (showModuleCanvas) {
-                return (
-                  <React.Fragment key={messageKey}>
-                    <div style={{ display: "flex", justifyContent: "center" }}>
-                      <div id={`canvas_${idx}`} style={{ width: "full" }} className="relative max-h-[400px] overflow-auto rounded-xl bg-zinc-50 z px-4 py-4 text-[11.5px] leading-relaxed text-zinc-600 shadow-[inset_0_2px_12px_rgba(242,60,57,0.12)]">
-                        <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_top,rgba(242,60,57,0.12),transparent_60%)]" />
-                        <div className="sticky top-0 z-20 ml-auto flex w-fit justify-end gap-2">
-                          <button onClick={() => handleCanvasCopy(idx)} className="flex h-8 w-8 items-center justify-center rounded-xl border border-zinc-200 bg-white text-zinc-600 shadow-sm transition hover:border-[var(--brand-light)] hover:text-[var(--brand)]" title="Copy to clipboard" aria-label="Copy">
-                            {copiedMessageKey === `canvas-${idx}` ? <IoCheckmark size={15} /> : <IoCopyOutline size={15} />}
-                          </button>
-                          <button onClick={() => onDownload(idx)} className="flex h-8 w-8 items-center justify-center rounded-xl border border-zinc-200 bg-white text-zinc-600 shadow-sm transition hover:border-[var(--brand-light)] hover:text-[var(--brand)]" title="Download" aria-label="Download">
-                            <IoDownloadOutline size={15} />
-                          </button>
-                        </div>
-                        <ReactMarkdown remarkPlugins={[remarkGfm]} className="relative z-10 space-y-1 break-words" components={markdownComponents}>{sanitizeMarkdownContent(messageText) || ""}</ReactMarkdown>
+            return (
+              <div key={msgId} className="flex flex-col gap-4">
+                <div className={`${isTrainingModule ? "w-full max-w-5xl mx-auto" : "max-w-[85%]"} flex flex-col gap-2`}>
+                  {isTrainingModule && (
+                    <div className="flex items-center justify-between px-2">
+                      <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest flex items-center gap-2">
+                        <IoSchoolOutline size={14} className="text-[var(--brand)]" />
+                        Training Canvas
+                      </span>
+                      <div className="flex gap-4">
+                        <button onClick={() => handleCopy(msg.text, msgId)} className="text-[11px] font-medium text-zinc-500 hover:text-[var(--brand)] flex items-center gap-1 transition-colors">
+                          {copiedMessageKey === msgId ? <IoCheckmark size={14} className="text-green-500" /> : <IoCopyOutline size={14} />}
+                          {copiedMessageKey === msgId ? "Copied" : "Copy"}
+                        </button>
+                        <button onClick={() => triggerDownload(msg)} className="text-[11px] font-medium text-zinc-500 hover:text-[var(--brand)] flex items-center gap-1 transition-colors">
+                          <IoDownloadOutline size={14} /> Download
+                        </button>
                       </div>
                     </div>
-                  </React.Fragment>
-                );
-              }
-
-              // Always render assistant/user message bubble when module canvas is not shown.
-              // This ensures previous canvases remain in the DOM instead of being removed by
-              // an early return that skips rendering assistant messages.
-              if (showAssistantMessage) {
-                return (
-                  <React.Fragment key={messageKey}>
-                    <div className={`flex w-full ${alignmentClass}`}>
-                      <div className={`group flex max-w-[full] flex-col gap-1 ${isUser ? "items-start" : "items-end"}`}>
-                        <div className={`relative ${bubbleBase} ${bubbleClass} text-[11.5px]`}>
-                          <div className="pointer-events-none absolute bottom-1.5 right-1.5 z-10 flex gap-2 opacity-0 transition group-hover:opacity-100">
-                            <button type="button" onClick={() => handleCopyMessage(messageText, messageKey)} className="pointer-events-auto flex h-6 w-6 items-center justify-center rounded-full border border-zinc-200 bg-white/95 text-zinc-500 shadow-sm transition hover:border-[var(--brand-light)] hover:text-[var(--brand)]" aria-label="Copy message" title="Copy message">
-                              {copiedMessageKey === messageKey ? <IoCheckmark size={12} /> : <IoCopyOutline size={12} />}
-                            </button>
-                            {canEdit && (
-                              <button type="button" onClick={() => onInputChange(messageText)} className="pointer-events-auto flex h-6 w-6 items-center justify-center rounded-full border border-zinc-200 bg-white/95 text-zinc-500 shadow-sm transition hover:border-[var(--brand-light)] hover:text-[var(--brand)]" aria-label="Edit message" title="Edit message" disabled={isLoading}>
-                                <IoCreateOutline size={12} />
-                              </button>
-                            )}
-                          </div>
-                          <ReactMarkdown remarkPlugins={[remarkGfm]} className="markdown-body space-y-2 break-words" components={markdownComponents}>{sanitizeMarkdownContent(messageText) || ""}</ReactMarkdown>
-                          {isStreaming && <span className="ml-2 inline-block animate-pulse text-[rgba(242,60,57,0.6)]">...</span>}
-                          {isPendingMessage && !isStreaming && <span className="mt-1 block text-[10px] text-zinc-400">Sending…</span>}
-                        </div>
-                      </div>
-                    </div>
-                  </React.Fragment>
-                );
-              }
-            })}
-
-            {hasSandboxPreview && (
-              <div className="rounded-3xl border border-zinc-200 bg-white shadow-[0_14px_36px_rgba(17,17,17,0.12)]">
-                <div className="relative w-full overflow-hidden rounded-3xl">
-                  {isVideoPreview ? (
-                    <div className="p-0">
-                      <video src={normalizedSandboxUrl} controls className="h-[320px] w-full object-contain bg-black" />
-                      <div className="p-2 text-right">
-                        <a href={normalizedSandboxUrl} target="_blank" rel="noreferrer" className="text-sm font-medium text-[var(--brand)]">Open video</a>
-                      </div>
-                    </div>
-                  ) : (
-                    <iframe src={normalizedSandboxUrl} title="Live sandbox preview" className="h-[320px] w-full pointer-events-none" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowFullScreen />
                   )}
-                </div>
-              </div>
-            )}
-
-            {streamError && (
-              <div className="flex w-full justify-start">
-                <div className="max-w-[80%] rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-[11.5px] text-red-600 shadow-inner shadow-red-200/60">
-                  <strong className="block text-[10px] uppercase tracking-[0.26em] text-red-500">
-                    Stream Error
-                  </strong>
-                  <span className="mt-1 block whitespace-pre-wrap">{streamError}</span>
-                </div>
-              </div>
-            )}
-
-            {isLoading && (
-              <div className="flex w-full justify-start">
-                <div className="flex items-center gap-2 rounded-xl bg-zinc-100 px-3 py-2 text-[11.5px] text-zinc-600 shadow-lg shadow-[0_16px_32px_rgba(242,60,57,0.14)]">
-                  <span className="h-2 w-2 animate-ping rounded-full bg-[var(--brand)]" />
-                  <span className="animate-pulse">Thinking???</span>
-                </div>
-              </div>
-            )}
-          </>
-        </div>
-        {!isAtBottom && (
-          <div className="pointer-events-none absolute bottom-24 left-1/2 -translate-x-1/2 transform">
-            <button
-              type="button"
-              onClick={scrollToBottom}
-              className="pointer-events-auto flex items-center gap-2 rounded-full border border-zinc-200 bg-white px-3 py-1.5 text-[11px] text-zinc-600 shadow-lg shadow-[0_16px_32px_rgba(242,60,57,0.14)] transition hover:border-[var(--brand-light)] hover:text-[var(--brand)]"
-            >
-              <IoArrowDownCircleOutline size={16} />
-              <span>Jump to latest</span>
-            </button>
-          </div>
-        )}
-
-        {(stageHistory.length > 0 || stage) && (
-          <div className="border-t border-zinc-200 bg-zinc-50/80 px-6 py-3">
-            <div className="flex items-center justify-between text-[11px] font-semibold uppercase tracking-[0.18em] text-zinc-600">
-              <span>{stageHistory[stageHistory.length - 1] ?? stage ?? "Progress"}</span>
-              <span>{normalizedStageProgress}%</span>
-            </div>
-            <div className="mt-3 h-2 w-full overflow-hidden rounded-full bg-zinc-200">
-              <div
-                className="h-full rounded-full bg-gradient-to-r from-[var(--brand)] via-[var(--brand)] to-[var(--brand-dark)] transition-all duration-500"
-                style={{ width: `${normalizedStageProgress}%` }}
-              />
-            </div>
-            {stageHistory.length > 0 && (
-              <div className="mt-3 flex flex-wrap items-center gap-2 text-[11px]">
-                {stageHistory.map((label, index) => {
-                  const isCompleted = index < stageHistory.length - 1;
-                  const isCurrent = index === stageHistory.length - 1;
-                  const baseBadge =
-                    "flex items-center gap-1 rounded-full border px-2 py-1 transition-all duration-300";
-                  const stateClass = isCompleted
-                    ? "border-[var(--brand-light)] bg-[var(--brand-lighter)] text-[var(--brand-dark)]"
-                    : isCurrent
-                      ? "border-[var(--brand)] bg-[var(--brand)]/10 text-[var(--brand-dark)] shadow-[0_12px_24px_rgba(242,60,57,0.18)]"
-                      : "border-zinc-200 bg-white text-zinc-400";
-                  return (
-                    <span key={`${label}-${index}`} className={`${baseBadge} ${stateClass}`}>
-                      {isCompleted && <span className="h-1.5 w-1.5 rounded-full bg-[var(--brand)]" />}
-                      {isCurrent && <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-[var(--brand)]" />}
-                      <span>{label}</span>
-                    </span>
-                  );
-                })}
-              </div>
-            )}
-          </div>
-        )}
-
-        <div className="border-t border-zinc-200 bg-white px-5 py-3">
-          <div className="flex items-center gap-3">
-            <div className="relative flex-1">
-              {hasAssistantSuggestions && (
-                <div className="absolute left-4 bottom-16 z-30 w-[320px] rounded-xl border border-zinc-200 bg-white shadow-lg">
-                  <div className="p-3">
-                    {suggestionItems.map((option) => (
-                      <button
-                        key={option.id}
-                        type="button"
-                        onClick={() => handleSuggestionClick(option)}
-                        className="w-full text-left px-3 py-2 hover:bg-zinc-50"
-                      >
-                        <div className="text-sm font-semibold text-zinc-800">{option.label}</div>
-                        {option.description ? (
-                          <div className="text-[11px] text-zinc-500">{option.description}</div>
-                        ) : null}
-                      </button>
-                    ))}
+                  <div className={`${isTrainingModule ? "min-h-[300px] border-2 bg-zinc-50/30 p-8 shadow-inner" : "bg-white border px-5 py-4 shadow-sm"} rounded-2xl border-zinc-200 text-[13.5px] text-zinc-700`}>
+                    <ReactMarkdown remarkPlugins={[remarkGfm]} components={markdownComponents}>{msg.text}</ReactMarkdown>
                   </div>
+                </div>
+              </div>
+            );
+          })}
+
+          {isLoading && messages.length > 0 && (
+            <div className="flex justify-start">
+              <div className="flex items-center gap-2 rounded-2xl border border-zinc-100 bg-white px-5 py-4 shadow-sm">
+                <div className="flex gap-1">
+                  <span className="w-1.5 h-1.5 bg-[var(--brand)] rounded-full animate-bounce"></span>
+                  <span className="w-1.5 h-1.5 bg-[var(--brand)] rounded-full animate-bounce [animation-delay:-0.15s]"></span>
+                  <span className="w-1.5 h-1.5 bg-[var(--brand)] rounded-full animate-bounce [animation-delay:-0.3s]"></span>
+                </div>
+                <span className="text-[12px] font-medium text-zinc-400 italic">Thinking...</span>
+              </div>
+            </div>
+          )}
+        </div>
+
+        <div className="border-t border-zinc-100 bg-white p-4">
+          <div className="relative flex flex-col gap-2 rounded-2xl bg-zinc-50 p-2 focus-within:ring-0 transition-all">
+            <div className="flex items-start gap-2">
+              {activeModule && activeModule.id !== "agent" && (
+                <div className="flex shrink-0 items-center gap-1.5 bg-[var(--brand)] text-white px-2.5 py-2 rounded-xl text-[11px] font-bold mt-0.5 shadow-sm">
+                  <IoLayersOutline size={14} />
+                  <span className="max-w-[90px] truncate">{activeModule.label}</span>
+                  <button onClick={() => setActiveModule(null)} className="hover:text-red-200 transition-colors"><IoCloseCircle size={15} /></button>
                 </div>
               )}
+
               <textarea
+                ref={textareaRef}
+                rows={1}
                 value={input}
-                onChange={(event) => onInputChange(event.target.value)}
-                onKeyDown={(event) => {
-                  if (event.key === "Enter" && !event.shiftKey && !isLoading) {
-                    event.preventDefault();
-                    handleSend();
-                  }
-                }}
-                disabled={isLoading}
-                rows={2}
-                placeholder="Ask something..."
-                className={`w-full resize-none rounded-2xl border border-zinc-200 bg-white pr-14 px-4 py-3 text-[12px] text-zinc-700 shadow-[0_8px_32px_rgba(15,23,42,0.08)] transition placeholder:text-zinc-400 focus:border-[var(--brand)] focus:outline-none focus:ring-2 focus:ring-[var(--brand-light)] hover:border-[var(--brand-light)] hover:shadow-[0_12px_36px_rgba(242,60,57,0.12)] ${isLoading ? "cursor-not-allowed opacity-60" : ""}`}
+                onChange={(e) => onInputChange(e.target.value)}
+                onKeyDown={(e) => e.key === 'Enter' && !e.shiftKey && (e.preventDefault(), onSend())}
+                placeholder={isNewChatRoute && messages.length === 0 ? "Type / to change mode..." : "Reply..."}
+                className="flex-1 resize-none focus:ring-0 text-sm py-2.5 px-2 min-h-[44px] max-h-[200px]"
               />
 
-              <div className="absolute right-2 top-1/2 -translate-y-1/2">
-                {isLoading ? (
-                  <button
-                    type="button"
-                    onClick={handleStop}
-                    className="flex h-10 w-10 items-center justify-center rounded-full bg-rose-600 text-white shadow-sm"
-                    aria-label="Stop response"
-                  >
-                    <IoStopCircleOutline size={18} />
-                  </button>
-                ) : (
-                  <div style={{ display: "flex", gap: "10px" }}>
-                    <button
-                      type="button"
-                      onClick={handleSend}
-                      className="flex h-10 w-10 items-center justify-center rounded-full bg-[var(--brand)] text-white shadow-sm hover:scale-[1.03] transition"
-                      aria-label="Send"
-                    >
-                      <IoSend size={16} />
-                    </button>
-                    <div className="mb-3 flex items-center gap-2">
-
-                      {modulesToShow.map((m) => {
-                        const isActive = m.id === normalizedCurrentAssistantId;
-                        return (
-                          isActive && (
-                            <button
-                              key={m.id}
-                              type="button"
-                              onClick={() =>
-                                handleSuggestionClick({ id: m.id, label: m.label })
-                              }
-                              title={m.label}
-                              className={`flex h-9 w-9 items-center justify-center rounded-full border px-2 text-sm transition ${isActive
-                                ? "border-[var(--brand)] bg-[var(--brand)]/10 text-[var(--brand-dark)] shadow-sm"
-                                : "border-zinc-200 bg-white text-zinc-600 hover:border-[var(--brand-light)]"
-                                }`}
-                            >
-                              {m.icon}
-                            </button>
-                          )
-                        );
-                      })}
-                    </div>
-
-                  </div>
-                )}
-              </div>
+              <button
+                onClick={isLoading ? onStop : onSend}
+                className="self-end mb-1 p-2.5 bg-[var(--brand)] text-white rounded-xl active:scale-95 transition-all shadow-lg"
+              >
+                {isLoading ? <IoStopCircleOutline size={22} /> : <IoSend size={22} />}
+              </button>
             </div>
+
+            {showSlashMenu && (
+              <div className="absolute bottom-full left-0 mb-3 w-80 bg-white border border-zinc-200 rounded-2xl shadow-2xl overflow-hidden z-50">
+                <div className="px-4 py-2.5 bg-zinc-50 text-[10px] font-bold text-zinc-400 uppercase border-b tracking-widest">Select Mode</div>
+                <div className="max-h-64 overflow-y-auto">
+                  {slashOptions.map((opt) => (
+                    <button key={opt.id} onClick={() => handleSelectModule(opt)} className="w-full flex items-center gap-3 px-4 py-3 text-left hover:bg-zinc-50 border-b last:border-none group">
+                      <div className="p-2.5 bg-zinc-100 rounded-xl group-hover:text-[var(--brand)] transition-colors">{opt.icon}</div>
+                      <div>
+                        <div className="text-xs font-bold text-zinc-800">{opt.label}</div>
+                        <div className="text-[10px] text-zinc-400">{opt.description}</div>
+                      </div>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
           </div>
         </div>
       </div>

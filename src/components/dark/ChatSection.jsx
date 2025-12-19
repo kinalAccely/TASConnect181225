@@ -1,6 +1,7 @@
 import React from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from 'remark-gfm';
+import { normalizeMarkdown } from "../../utils/normalizeMarkdown";
 const SANDBOX_HOST = import.meta.env.VITE_SANDBOX_HOST ?? undefined;
 import {
   IoSend,
@@ -801,7 +802,7 @@ export default function ChatSection({
                         </button>
                       </div>
                       <div className="prose relative z-10 break-words">
-                        <ReactMarkdown
+                        <ReactMarkdown 
                           remarkPlugins={[remarkGfm]}
                           className="relative z-10 space-y-1 break-words"
                           components={{
@@ -813,7 +814,7 @@ export default function ChatSection({
                             ...markdownComponents,
                           }}
                         >
-                          {sanitizeMarkdownContent(messageText) || ""}
+                          {normalizeMarkdown(messageText)}
                         </ReactMarkdown>
                       </div>
                     </div>
@@ -905,7 +906,7 @@ export default function ChatSection({
                             ...markdownComponents,
                           }}
                         >
-                          {sanitizeMarkdownContent(messageText) || ""}
+                          {normalizeMarkdown(messageText)}
                         </ReactMarkdown>
                       </div>
                       {isStreaming && (
