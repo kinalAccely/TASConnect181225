@@ -25,11 +25,15 @@ export default function ChatSection({
   onSend,
   onStop,
   onEditMessage,
+  sandboxUrl,
   onAssistantSuggestionSelect,
   threadId,
   assistantId: propsAssistantId,
   currentAssistantId
 }) {
+
+  const lastRenderedSandboxUrlRef = React.useRef(null);
+  const shouldRenderSandbox = sandboxUrl && sandboxUrl !== lastRenderedSandboxUrlRef.current;
 
   const normalizeSandboxUrl = (url) => {
     if (typeof url !== "string" || !url.trim()) return null;
@@ -202,62 +206,68 @@ export default function ChatSection({
 
           {/* Updated CHAT MESSAGES LOGIC */}
           {messages.map((msg, idx) => {
+            console.log(msg);
             const isUser = msg.role === "user";
             const msgId = msg.id || `msg-${idx}`;
+
             const currentMsgAssistantId =
               msg.assistant_id || propsAssistantId || activeModule?.id;
+
             const isTrainingModule =
               currentMsgAssistantId === "training_module_graph";
 
-            const sandboxUrlForMsg =
-              msg.sandbox_url ?? msg.raw?.sandbox_url ?? msg.metadata?.sandbox_url;
+            // ✅ normalize sandbox from props
+            const normalizedSandbox =
+              sandboxUrl ? normalizeSandboxUrl(sandboxUrl) : null;
 
-            const normalizedSandbox = normalizeSandboxUrl(sandboxUrlForMsg);
-
-            // USER MESSAGE
+            /* ================= USER MESSAGE ================= */
             if (isUser) {
               return (
-                <React.Fragment key={msgId}>
-                  <div className="flex w-full justify-end mt-[5px]">
-                    <div className="group relative max-w-[75%] rounded-2xl border border-[var(--brand-light)] bg-[var(--brand-lighter)] px-4 py-3 text-[13px] text-zinc-800 shadow-sm">
-                      <button
-                        onClick={() => handleCopy(msg.text, msgId)}
-                        className="absolute top-2 right-2 flex items-center gap-1 text-[11px] font-medium
-                   text-zinc-400 hover:text-[var(--brand)]
-                   opacity-0 group-hover:opacity-100
-                   pointer-events-none group-hover:pointer-events-auto
-                   transition-opacity duration-200"
-                      >
-                        {copiedMessageKey === msgId ? (
-                          <IoCheckmark size={14} className="text-green-500" />
-                        ) : (
-                          <IoCopyOutline size={14} />
-                        )}
-                      </button>
+                <div key={msgId} className="flex w-full justify-end mt-[5px]">
+                  <div className="group relative max-w-[75%] rounded-2xl border border-[var(--brand-light)] bg-[var(--brand-lighter)] px-4 py-3 text-[13px] text-zinc-800 shadow-sm">
+                    <button
+                      onClick={() => handleCopy(msg.text, msgId)}
+                      className="absolute top-2 right-2 flex items-center gap-1 text-[11px] font-medium
+              text-zinc-400 hover:text-[var(--brand)]
+              opacity-0 group-hover:opacity-100
+              pointer-events-none group-hover:pointer-events-auto
+              transition-opacity duration-200"
+                    >
+                      {copiedMessageKey === msgId ? (
+                        <IoCheckmark size={14} className="text-green-500" />
+                      ) : (
+                        <IoCopyOutline size={14} />
+                      )}
+                    </button>
 
-                      <p className="whitespace-pre-wrap break-words">
-                        {msg.text}
-                      </p>
-                    </div>
+                    <p className="whitespace-pre-wrap break-words">
+                      {msg.text}
+                    </p>
                   </div>
-                </React.Fragment>
+                </div>
               );
             }
 
-            // ASSISTANT / TRAINING MESSAGE
+            /* ================= ASSISTANT / TRAINING ================= */
             return (
               <div key={msgId} className="flex flex-col gap-4">
-                {normalizedSandbox && (
-                  <div className="mt-3 rounded-2xl border border-zinc-200 bg-white shadow-inner overflow-hidden">
-                    <iframe
-                      src={normalizedSandbox}
-                      title={`sandbox-${msgId}`}
-                      className="w-full h-[320px]"
-                      sandbox="allow-scripts allow-same-origin allow-forms allow-modals"
-                      loading="lazy"
-                    />
-                  </div>
-                )}
+
+                {/* ✅ SANDBOX — render once, don’t block message */}
+                {normalizedSandbox &&
+                  lastRenderedSandboxUrlRef.current !== normalizedSandbox && (
+                    <div className="w-full h-[400px] border border-zinc-200 rounded-2xl overflow-hidden shadow-sm">
+                      <iframe
+                        src={normalizedSandbox}
+                        title="Live Sandbox"
+                        className="w-full h-full"
+                        allowFullScreen
+                        onLoad={() => {
+                          // 🔥 mark sandbox as rendered
+                          lastRenderedSandboxUrlRef.current = normalizedSandbox;
+                        }}
+                      />
+                    </div>
+                  )}
 
                 <div
                   className={`${isTrainingModule
@@ -282,6 +292,7 @@ export default function ChatSection({
                           )}
                           {copiedMessageKey === msgId ? "Copied" : "Copy"}
                         </button>
+
                         <button
                           onClick={() => triggerDownload(msg)}
                           className="text-[11px] font-medium text-zinc-500 hover:text-[var(--brand)] flex items-center gap-1"
@@ -301,10 +312,10 @@ export default function ChatSection({
                     <button
                       onClick={() => handleCopy(msg.text, msgId)}
                       className="absolute top-2 right-2 flex items-center gap-1 text-[11px] font-medium
-               text-zinc-400 hover:text-[var(--brand)]
-               opacity-0 group-hover:opacity-100
-               pointer-events-none group-hover:pointer-events-auto
-               transition-opacity duration-200"
+              text-zinc-400 hover:text-[var(--brand)]
+              opacity-0 group-hover:opacity-100
+              pointer-events-none group-hover:pointer-events-auto
+              transition-opacity duration-200"
                     >
                       {copiedMessageKey === msgId ? (
                         <IoCheckmark size={14} className="text-green-500" />
@@ -317,13 +328,14 @@ export default function ChatSection({
                       remarkPlugins={[remarkGfm]}
                       components={markdownComponents}
                     >
-                      {msg.text || "" /* Placeholder until AI message streams */}
+                      {msg.text || ""}
                     </ReactMarkdown>
                   </div>
                 </div>
               </div>
             );
           })}
+
 
           {isLoading && messages.length > 0 && (
             <div className="flex justify-start">

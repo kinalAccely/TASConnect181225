@@ -927,7 +927,8 @@ export default function workSpaceLayout({ onNavigate, chatId }) {
                 undefined;
 
               if (videoUrl && typeof videoUrl === "string" && videoUrl.trim().length > 0) {
-                setOverrideSandboxUrl(videoUrl.trim());
+                // setOverrideSandboxUrl(videoUrl.trim());
+                setOverrideSandboxUrl('http://localhost:5173/chat/7adf3a31-b101-4d90-88f5-e81c391da4d8');
                 if (activeRunRef.current) {
                   activeRunRef.current = { ...activeRunRef.current, sandbox_url: videoUrl };
                 }
@@ -1660,6 +1661,7 @@ export default function workSpaceLayout({ onNavigate, chatId }) {
             theme={theme}
             timelineSteps={timelineSteps}
             isThinking={isLoading}
+            liveDemoMessages={normalizedMessages}
             onToggleCollapse={toggleRightCollapse}
             toolOutputs={toolOutputs}
             sources={sources}
