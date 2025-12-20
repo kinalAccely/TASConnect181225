@@ -41,6 +41,7 @@ export default function LeftSidebar({
 }) {
   const [threads, setThreads] = useState([]);
   const [currentId, setCurrentId] = useState(null);
+  const [creating, setCreating] = useState(false);
   const normalizedSelectedId =
     selectedChatId !== undefined && selectedChatId !== null
       ? String(selectedChatId)
@@ -128,11 +129,18 @@ export default function LeftSidebar({
   };
 
   const handleNewChat = () => {
-    if (onStartNewChat) {
-      onStartNewChat();
-    }
-    if (onNavigate) {
-      onNavigate("/chat");
+    if (creating) return;
+    setCreating(true);
+    try {
+      if (onStartNewChat) {
+        onStartNewChat();
+      }
+      if (onNavigate) {
+        onNavigate("/chat");
+      }
+    } finally {
+      // prevent rapid re-trigger; re-enable after short delay
+      setTimeout(() => setCreating(false), 600);
     }
   };
 
@@ -140,7 +148,7 @@ export default function LeftSidebar({
     <>
       <button
         onClick={handleNewChat}
-        disabled={isLoading}
+        disabled={isLoading || creating}
         className={`flex h-10 w-10 items-center justify-center rounded-2xl bg-gradient-to-br from-[var(--brand)] via-[var(--brand)] to-[var(--brand-dark)] text-white shadow-lg shadow-[0_16px_32px_rgba(242,60,57,0.25)] transition hover:scale-[1.03] hover:shadow-[0_20px_40px_rgba(242,60,57,0.32)] ${isLoading ? "cursor-not-allowed opacity-60" : ""
           }`}
         title="Start a new chat"
@@ -166,7 +174,7 @@ export default function LeftSidebar({
       <div className="flex items-center justify-between gap-3">
         <button
           onClick={handleNewChat}
-          disabled={isLoading}
+          disabled={isLoading || creating}
           className={`flex flex-1 items-center justify-center gap-2 rounded-2xl bg-gradient-to-r from-[var(--brand)] via-[var(--brand)] to-[var(--brand-dark)] py-2 text-sm font-semibold text-white shadow-lg shadow-[0_16px_32px_rgba(242,60,57,0.25)] transition hover:scale-[1.02] hover:shadow-[0_20px_40px_rgba(242,60,57,0.32)] ${isLoading ? "cursor-not-allowed opacity-60" : ""
             }`}
         >

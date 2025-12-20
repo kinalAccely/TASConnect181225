@@ -306,8 +306,8 @@ const extractMessageText = (message) => {
   return segments.join("\n\n");
 };
 
-const mapMessagesForDisplay = (streamMessages, isLoading) => {
-  console.log("Mapping messages for display:", streamMessages, isLoading);
+const mapMessagesForDisplay = (streamMessages, isLoading , custom) => {
+  console.log("Mapping messages for display:", custom);
   if (!Array.isArray(streamMessages)) {
     return [];
   }
@@ -760,6 +760,7 @@ export default function workSpaceLayout({ onNavigate, chatId }) {
     submit,
     isLoading,
     stop,
+    custom,
     values: streamValues,
   } = useStream({
     assistantId,
@@ -817,6 +818,10 @@ export default function workSpaceLayout({ onNavigate, chatId }) {
       setStreamError(friendlyMessage);
     },
   });
+
+  useEffect(() => {
+    setIsRightCollapsed(true)
+  },[!activeThreadId])
 
   const cancelActiveRun = React.useCallback(
     async (runMeta) => {
@@ -1004,7 +1009,7 @@ export default function workSpaceLayout({ onNavigate, chatId }) {
   }, [streamValues]);
 
   const baseMessages = React.useMemo(
-    () => mapMessagesForDisplay(streamMessages, isLoading),
+    () => mapMessagesForDisplay(streamMessages, isLoading , custom),
     [streamMessages, isLoading],
   );
   React.useEffect(() => {
@@ -1208,8 +1213,8 @@ export default function workSpaceLayout({ onNavigate, chatId }) {
   setAssistantId(DEFAULT_ASSISTANT_ID);
     handleInputChange("");
     setSources([]);
-  // Reset right-side panel to open when starting a new chat
-  setIsRightCollapsed(false);
+  // Collapse/hide right-side panel when starting a new chat
+  setIsRightCollapsed(true);
     setRefreshKey((prev) => prev + 1);
     resetToolTracking();
     setStreamError(null);
@@ -1610,8 +1615,8 @@ export default function workSpaceLayout({ onNavigate, chatId }) {
     <div className={containerClassName}>
       <div className="flex h-full w-full min-h-0 max-w-8xl flex-col gap-4">
 
-        <div className="flex min-h-0 flex-1 gap-3 overflow-hidden">
-          <div>
+        <div className="flex min-h-0 flex-1 gap-3 overflow-hidden items-stretch">
+          <div className="flex h-full flex-col">
             <TopHeader theme={theme} isLeftCollapsed={isLeftCollapsed}  />
             <LeftSidebar
               theme={theme}
@@ -1647,6 +1652,7 @@ export default function workSpaceLayout({ onNavigate, chatId }) {
             currentAssistantId={assistantId}
             onAssistantSuggestionSelect={handleAssistantSuggestionSelect}
             shouldShowAssistantSuggestions={shouldShowAssistantSuggestions}
+            threadId={activeThreadId}
           />
 
           <RightSidebar

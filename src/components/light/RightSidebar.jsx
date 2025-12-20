@@ -114,8 +114,8 @@ export default function RightSidebar({
   React.useEffect(() => {
     const currentKeys = Array.isArray(toolOutputs)
       ? toolOutputs
-          .map((tool, index) => tool?.__key ?? tool?.id ?? `tool-${index}`)
-          .filter(Boolean)
+        .map((tool, index) => tool?.__key ?? tool?.id ?? `tool-${index}`)
+        .filter(Boolean)
       : [];
 
     const prevKeys = prevToolKeysRef.current;
@@ -196,6 +196,7 @@ export default function RightSidebar({
   }, [liveDemoMessages]);
 
   const hasToolOutputs = toolCards.length > 0;
+  console.log('toolCards:', toolCards);
   const hasDemoMessages = demoMessages.length > 0;
   const hasSources = Array.isArray(sources) && sources.length > 0;
   const demoStepCount = Array.isArray(liveDemoSteps) ? liveDemoSteps.length : 0;
@@ -267,7 +268,7 @@ export default function RightSidebar({
       </div>
 
       {showDemoSteps ? (
-        <div className="mt-2 flex max-h-[52vh] flex-col gap-2 overflow-y-auto pr-1 text-[12px]">
+        <div className="mt-2 flex max-h-[100vh] flex-col gap-2 overflow-y-auto pr-1 text-[12px]">
           {isThinking && (
             <div className="flex items-center gap-2 rounded-2xl border border-zinc-200 bg-white px-3 py-2 text-zinc-500 shadow-inner shadow-orange-100/40">
               <span className="h-2 w-2 animate-ping rounded-full bg-[var(--brand)]" />
@@ -296,11 +297,10 @@ export default function RightSidebar({
               {demoMessages.map((message) => (
                 <div
                   key={message.key}
-                  className={`rounded-2xl border border-zinc-200 px-3 py-2 shadow-inner shadow-orange-100/35 transition-all duration-300 ${
-                    message.isUser
-                      ? "bg-[var(--brand-lighter)] text-[var(--brand-dark)]"
-                      : "bg-white text-zinc-600"
-                  }`}
+                  className={`rounded-2xl border border-zinc-200 px-3 py-2 shadow-inner shadow-orange-100/35 transition-all duration-300 ${message.isUser
+                    ? "bg-[var(--brand-lighter)] text-[var(--brand-dark)]"
+                    : "bg-white text-zinc-600"
+                    }`}
                 >
                   <div className="text-[9px] font-semibold uppercase tracking-[0.26em] text-zinc-500">
                     {message.roleLabel}
@@ -318,26 +318,53 @@ export default function RightSidebar({
           )}
         </div>
       ) : hasToolOutputs ? (
-        <div className="mt-2 flex max-h-[52vh] flex-col gap-2 overflow-y-auto pr-1 text-[11px]">
+        <div className="mt-2 flex max-h-[100vh] flex-col gap-2 overflow-y-auto pr-1 text-[11px]">
           {toolCards.map((tool) => {
             const isNew = recentToolKeys.includes(tool.key);
+
+            // ✅ SAFE PARSE (supports string or array)
+            let todos = [];
+            if (tool.body) {
+              try {
+                todos =
+                  typeof tool.body === "string"
+                    ? JSON.parse(tool.body)['todos']
+                    : tool.body.todos;
+              } catch (e) {
+                console.error("Invalid todos JSON", e);
+              }
+            }
+
             return (
               <div
                 key={tool.key}
-                className={`rounded-2xl border border-zinc-200 bg-white px-3 py-2 text-zinc-600 shadow-inner shadow-orange-100/30 transition-all duration-300 ease-out ${isNew ? "fade-slide-in" : ""}`}
+                className={`rounded-2xl border border-zinc-200 bg-white px-3 py-2 text-zinc-600 shadow-inner shadow-orange-100/30 transition-all duration-300 ease-out ${isNew ? "fade-slide-in" : ""
+                  }`}
               >
-                <div className="text-[10px] uppercase tracking-[0.3em] text-zinc-500">
+                {/* TITLE */}
+                <div key={`${tool.key}key`} className="text-[10px] uppercase tracking-[0.3em] text-zinc-500">
                   {tool.title}
                 </div>
-                <div className="mt-1 font-mono text-[11px] text-zinc-600 whitespace-pre-wrap">
-                  {tool.body}
+
+                {/* BODY */}
+                <div className="mt-1 font-mono text-[11px] text-zinc-600 whitespace-pre-wrap break-words">
+                  {Array.isArray(todos) && todos.length > 0 && (
+                    <ul className="list-disc pl-4 space-y-1">
+                      {todos.map((todo, idx) => (
+                        <li key={idx} className="break-words">
+                          {todo.content}
+                        </li>
+                      ))}
+                    </ul>
+                  )}
                 </div>
               </div>
             );
           })}
         </div>
+
       ) : (
-        <div className="mt-2 flex max-h-[52vh] flex-col gap-2 overflow-y-auto pr-1 text-[11px]">
+        <div className="mt-2 flex max-h-[100vh] flex-col gap-2 overflow-y-auto pr-1 text-[11px]">
           {sources.map((source, index) => (
             <div
               key={source?.__key ?? source?.id ?? `${index}`}
@@ -356,25 +383,22 @@ export default function RightSidebar({
 
   return (
     <div
-      className={`relative flex h-full transition-all duration-300 ease-in-out ${
-        isCollapsed ? "w-20" : "w-64"
-      }`}
+      className={`relative flex h-full min-h-0 transition-all duration-300 ease-in-out ${isCollapsed ? "w-20" : "w-64"
+        }`}
     >
       <aside
-        className={`flex h-full w-full flex-col gap-4 rounded-3xl border border-zinc-200 bg-white/85 shadow-[0_16px_40px_rgba(17,17,17,0.08)] backdrop-blur-md transition-all duration-300 ease-in-out ${
-          isCollapsed
-            ? `items-center gap-3 px-2 py-4 ${isTransitioning ? "opacity-70 blur-[0.2px]" : "opacity-95"}`
-            : `gap-4 p-5 ${isTransitioning ? "opacity-60 blur-[0.2px]" : "opacity-100"}`
-        }`}
+        className={`flex h-full min-h-0 w-full flex-col gap-4 rounded-3xl border border-zinc-200 bg-white/85 shadow-[0_16px_40px_rgba(17,17,17,0.08)] backdrop-blur-md transition-all duration-300 ease-in-out ${isCollapsed
+          ? `items-center gap-3 px-2 py-4 ${isTransitioning ? "opacity-70 blur-[0.2px]" : "opacity-95"}`
+          : `gap-4 p-5 ${isTransitioning ? "opacity-60 blur-[0.2px]" : "opacity-100"}`
+          }`}
       >
         {isCollapsed ? collapsedContent : expandedContent}
       </aside>
 
       <button
         onClick={onToggleCollapse}
-        className={`absolute z-10 flex h-9 w-9 items-center justify-center rounded-full border border-zinc-200 bg-white text-zinc-600 shadow-sm transition duration-300 ease-in-out hover:border-orange-300 hover:text-orange-500 ${
-          isCollapsed ? "top-1/2 left-[-18px] -translate-y-1/2" : "top-4 -left-4"
-        }`}
+        className={`absolute z-10 flex h-9 w-9 items-center justify-center rounded-full border border-zinc-200 bg-white text-zinc-600 shadow-sm transition duration-300 ease-in-out hover:border-orange-300 hover:text-orange-500 ${isCollapsed ? "top-1/2 left-[-18px] -translate-y-1/2" : "top-4 -left-4"
+          }`}
         aria-label={isCollapsed ? "Expand right panel" : "Collapse right panel"}
       >
         {isCollapsed ? <IoChevronBack size={14} /> : <IoChevronForward size={14} />}
