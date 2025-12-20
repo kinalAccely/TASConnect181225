@@ -927,8 +927,7 @@ export default function workSpaceLayout({ onNavigate, chatId }) {
                 undefined;
 
               if (videoUrl && typeof videoUrl === "string" && videoUrl.trim().length > 0) {
-                // setOverrideSandboxUrl(videoUrl.trim());
-                setOverrideSandboxUrl('http://localhost:5173/chat/7adf3a31-b101-4d90-88f5-e81c391da4d8');
+                setOverrideSandboxUrl(videoUrl.trim());
                 if (activeRunRef.current) {
                   activeRunRef.current = { ...activeRunRef.current, sandbox_url: videoUrl };
                 }
@@ -999,6 +998,7 @@ export default function workSpaceLayout({ onNavigate, chatId }) {
   // new streamValues provide a replacement.
   React.useEffect(() => {
     if (!streamValues || typeof streamValues !== "object") return;
+    console.log("Checking for sandbox URL candidates to potentially clear override." , streamValues);
     const hasSandboxCandidate =
       typeof streamValues.sandbox_url === "string" && streamValues.sandbox_url.trim().length > 0 ||
       typeof streamValues.sandboxUrl === "string" && streamValues.sandboxUrl.trim().length > 0 ||

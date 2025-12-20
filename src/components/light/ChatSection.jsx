@@ -254,7 +254,7 @@ export default function ChatSection({
 
                 {/* ✅ SANDBOX — render once, don’t block message */}
                 {normalizedSandbox &&
-                  lastRenderedSandboxUrlRef.current !== normalizedSandbox && (
+                  lastRenderedSandboxUrlRef.current !== normalizedSandbox && isLoading (
                     <div className="w-full h-[400px] border border-zinc-200 rounded-2xl overflow-hidden shadow-sm">
                       <iframe
                         src={normalizedSandbox}
