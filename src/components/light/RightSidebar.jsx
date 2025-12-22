@@ -144,14 +144,14 @@ export default function RightSidebar({
       if (!body) {
         return acc;
       }
-      if(title.toLowerCase() == 'write_todos'){
+      // if(title?.toLowerCase() == 'write_todos'){
         acc.push({
           key,
           title,
           body,
         });
         return acc;
-      }
+      // }
     }, []);
   }, [toolOutputs]);
 
