@@ -28,13 +28,20 @@ export default function ChatSection({
   sandboxUrl,
   onAssistantSuggestionSelect,
   threadId,
+  updatedevents,
   assistantId: propsAssistantId,
   currentAssistantId
 }) {
-
   const lastRenderedSandboxUrlRef = React.useRef(null);
   const shouldRenderSandbox = sandboxUrl && sandboxUrl !== lastRenderedSandboxUrlRef.current;
+  const [sandboxUrlLink , setSandBoxUrl] = useState('');
 
+  useEffect(()=>{
+    if(sandboxUrl){
+      setSandBoxUrl(sandboxUrl);
+    }
+  } , [sandboxUrl])
+  const [updateEventKey , setUpdateEventKey] = React.useState([]);
   const normalizeSandboxUrl = (url) => {
     if (typeof url !== "string" || !url.trim()) return null;
     const trimmed = url.trim();
@@ -65,6 +72,11 @@ export default function ChatSection({
       }
     }
   }, [currentAssistantId]);
+
+  useEffect(()=>{
+    console.log(updatedevents);
+    setUpdateEventKey(Object.keys(updatedevents));
+  },[updatedevents])
 
   const isNewChatRoute = useMemo(() => {
     const pathSegments = window.location.pathname.split('/').filter(Boolean);
@@ -117,6 +129,10 @@ export default function ChatSection({
     }
   }, [input]);
 
+  useEffect(()=>{
+    console.log(messages);
+  },[messages])
+
   const showSlashMenu = isNewChatRoute && messages.length === 0 && input.startsWith("/");
   const [showScrollButton, setShowScrollButton] = useState(false);
 
@@ -158,6 +174,9 @@ export default function ChatSection({
     li: ({ node, ...props }) => <li className="pl-1" {...props} />,
     strong: ({ node, ...props }) => <strong className="font-bold text-zinc-900" {...props} />,
   };
+
+  const normalizedSandbox =
+    sandboxUrl ? normalizeSandboxUrl(sandboxUrl) : null;
 
   return (
     <div className="relative flex h-full min-h-0 flex-1 flex-col overflow-hidden bg-zinc-50">
@@ -206,7 +225,7 @@ export default function ChatSection({
 
           {/* Updated CHAT MESSAGES LOGIC */}
           {messages.map((msg, idx) => {
-            console.log(msg);
+            console.log(isLoading);
             const isUser = msg.role === "user";
             const msgId = msg.id || `msg-${idx}`;
 
@@ -215,10 +234,6 @@ export default function ChatSection({
 
             const isTrainingModule =
               currentMsgAssistantId === "training_module_graph";
-
-            // ✅ normalize sandbox from props
-            const normalizedSandbox =
-              sandboxUrl ? normalizeSandboxUrl(sandboxUrl) : null;
 
             /* ================= USER MESSAGE ================= */
             if (isUser) {
@@ -253,22 +268,6 @@ export default function ChatSection({
               <div key={msgId} className="flex flex-col gap-4">
 
                 {/* ✅ SANDBOX — render once, don’t block message */}
-                {normalizedSandbox &&
-                  lastRenderedSandboxUrlRef.current !== normalizedSandbox && isLoading (
-                    <div className="w-full h-[400px] border border-zinc-200 rounded-2xl overflow-hidden shadow-sm">
-                      <iframe
-                        src={normalizedSandbox}
-                        title="Live Sandbox"
-                        className="w-full h-full"
-                        allowFullScreen
-                        onLoad={() => {
-                          // 🔥 mark sandbox as rendered
-                          lastRenderedSandboxUrlRef.current = normalizedSandbox;
-                        }}
-                      />
-                    </div>
-                  )}
-
                 <div
                   className={`${isTrainingModule
                     ? "w-full max-w-5xl mx-auto"
@@ -335,9 +334,24 @@ export default function ChatSection({
               </div>
             );
           })}
+          {sandboxUrlLink && activeModule.id == 'live_demo' && !isNewChatRoute && (
+              <div className="w-full h-[400px] border border-zinc-200 rounded-2xl overflow-hidden shadow-sm">
+                <iframe
+                  src={normalizeSandboxUrl(sandboxUrlLink)}
+                  title="Live Sandbox"
+                  className="w-full h-full"
+                  style={{pointerEvents : 'none'}}
+                  allowFullScreen
+                  onLoad={() => {
+                    // 🔥 mark sandbox as rendered
+                    lastRenderedSandboxUrlRef.current = normalizedSandbox;
+                  }}
+                />
+              </div>
+            )}
 
 
-          {isLoading && messages.length > 0 && (
+          {isLoading && messages.length > 0  && (
             <div className="flex justify-start">
               <div className="flex items-center gap-2 rounded-2xl border border-zinc-100 bg-white px-5 py-4 shadow-sm">
                 <div className="flex gap-1">

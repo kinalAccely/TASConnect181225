@@ -60,7 +60,7 @@ const extractAssistantIdFromThread = (thread) => {
   return resolveAssistantId(match);
 };
 
-const UNIFIED_STREAM_MODES = ["messages-tuple", "values", "modules", "metadata", "custom"];
+const UNIFIED_STREAM_MODES = ["messages-tuple", "values", "modules", "metadata", "custom","updates"];
 const TEXTUAL_CONTENT_TYPES = new Set([
   "text",
   "output_text",
@@ -399,7 +399,7 @@ const resolveStageFromValues = (values) => {
 
 export default function workSpaceLayout({ onNavigate, chatId }) {
   const chatBodyRef = React.useRef(null);
-
+  const [updatedevents , setUpdatedEvents]=React.useState({});
   const [assistantId, setAssistantId] = React.useState(DEFAULT_ASSISTANT_ID);
   const [showAssistantChooser, setShowAssistantChooser] = React.useState(false);
   const [isLeftCollapsed, setIsLeftCollapsed] = React.useState(false);
@@ -774,6 +774,10 @@ export default function workSpaceLayout({ onNavigate, chatId }) {
     onCreated: (runMeta) => {
       console.log("Stream created with run metadata:", runMeta);
       storeActiveRunMeta(runMeta);
+    },
+    onUpdateEvent: (runMeta) => {
+      console.log("Stream created with run metadata:", runMeta);
+      setUpdatedEvents(runMeta);
     },
     onFinish: (_state, runMeta) => {
       if (runMeta?.run_id && activeRunRef.current?.run_id === runMeta.run_id) {
@@ -1636,6 +1640,7 @@ export default function workSpaceLayout({ onNavigate, chatId }) {
           <ChatSection
             theme={theme}
             chatBodyRef={chatBodyRef}
+            updatedevents={updatedevents}
             input={input}
             isLoading={isLoading}
             messages={normalizedMessages}

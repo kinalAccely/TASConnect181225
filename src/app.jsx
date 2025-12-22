@@ -93,6 +93,13 @@ export default function App() {
   });
   const threadIdsRef = useRef(new Set());
 
+  useEffect(() => {
+    console.log(window.location.pathname)
+    if (["", "/"].includes(window.location.pathname)) {
+      navigate("/chat");
+    }
+  }, [currentPath]);
+
   /**
    * Load all threads on startup
    * Ensures fetchThreads() uses correct baseUrl (from your service)

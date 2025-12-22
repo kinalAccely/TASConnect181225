@@ -144,12 +144,14 @@ export default function RightSidebar({
       if (!body) {
         return acc;
       }
-      acc.push({
-        key,
-        title,
-        body,
-      });
-      return acc;
+      if(title.toLowerCase() == 'write_todos'){
+        acc.push({
+          key,
+          title,
+          body,
+        });
+        return acc;
+      }
     }, []);
   }, [toolOutputs]);
 
@@ -195,7 +197,7 @@ export default function RightSidebar({
       .filter(Boolean);
   }, [liveDemoMessages]);
 
-  const hasToolOutputs = toolCards.length > 0;
+  const hasToolOutputs = toolCards?.length > 0;
   console.log('toolCards:', toolCards);
   const hasDemoMessages = demoMessages.length > 0;
   const hasSources = Array.isArray(sources) && sources.length > 0;
