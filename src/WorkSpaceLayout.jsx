@@ -5,6 +5,8 @@ import RightSidebar from "./components/RightSidebar.jsx";
 import TopHeader from "./components/TopHeader.jsx";
 import { useStream } from "@langchain/langgraph-sdk/react";
 import { resolveAssistantId, fetchThreadById } from "./services/threadService.js";
+import { useIdleMemo } from "./utils/useIdleMemo.js";
+import { useLocation, useNavigate } from "react-router-dom";
 
 const DEFAULT_TIMELINE_STEPS = [
   "Load interactive preview",
@@ -60,7 +62,7 @@ const extractAssistantIdFromThread = (thread) => {
   return resolveAssistantId(match);
 };
 
-const UNIFIED_STREAM_MODES = ["messages-tuple", "values", "modules", "metadata", "custom","updates"];
+const UNIFIED_STREAM_MODES = ["messages-tuple", "values", "modules", "metadata", "custom", "updates"];
 const TEXTUAL_CONTENT_TYPES = new Set([
   "text",
   "output_text",
@@ -306,21 +308,28 @@ const extractMessageText = (message) => {
   return segments.join("\n\n");
 };
 
-const mapMessagesForDisplay = (streamMessages, isLoading , custom) => {
-  console.log("Mapping messages for display:", custom);
-  if (!Array.isArray(streamMessages)) {
-    return [];
-  }
+const mapMessagesForDisplay = (
+  streamMessages,
+  isLoading,
+  custom,
+  updatedevents
+) => {
+  if (!Array.isArray(streamMessages)) return [];
+
+  const updateEventKey = Object.keys(updatedevents || {});
+  const shouldAcceptAssistantText =
+    updateEventKey.includes("updates") ||
+    updateEventKey.includes("result");
 
   const normalized = [];
   let lastAssistantIndex = -1;
 
   streamMessages.forEach((message, index) => {
-    if (!message) {
-      return;
-    }
+    if (!message) return;
 
     const type = message.type ?? message.role;
+
+    // 🚫 Ignore tool-related events
     if (
       type === "tool" ||
       type === "tool_calls" ||
@@ -332,8 +341,24 @@ const mapMessagesForDisplay = (streamMessages, isLoading , custom) => {
 
     const role = resolveRole(message, "assistant");
     const rawText = extractMessageText(message);
-    const trimmedText = rawText.trim();
+    const trimmedText = rawText?.trim?.() ?? "";
 
+    const isAssistant = role === "assistant" || role === "system";
+    const isLastMessage = index === streamMessages.length - 1;
+
+    /**
+     * 🔑 APPLY updatedEventKeys ONLY FOR STREAMING MESSAGE
+     */
+    if (
+      isAssistant &&
+      isLastMessage &&
+      isLoading &&               // streaming in progress
+      !shouldAcceptAssistantText // invalid stream event
+    ) {
+      return;
+    }
+
+    // Skip empty assistant messages
     if (!trimmedText && role !== "user") {
       return;
     }
@@ -344,15 +369,19 @@ const mapMessagesForDisplay = (streamMessages, isLoading , custom) => {
       text: trimmedText || rawText,
       type,
       raw: message,
+      isStreaming: false,
     };
 
     normalized.push(normalizedMessage);
 
-    if (role !== "user" && role !== "system") {
+    if (isAssistant) {
       lastAssistantIndex = normalized.length - 1;
     }
   });
 
+  /**
+   * 🔄 Mark only the latest assistant message as streaming
+   */
   if (isLoading && lastAssistantIndex >= 0) {
     normalized[lastAssistantIndex] = {
       ...normalized[lastAssistantIndex],
@@ -362,6 +391,7 @@ const mapMessagesForDisplay = (streamMessages, isLoading , custom) => {
 
   return normalized;
 };
+
 
 const resolveStageFromValues = (values) => {
   if (!values || typeof values !== "object") {
@@ -397,9 +427,11 @@ const resolveStageFromValues = (values) => {
   return { stage, stageProgress };
 };
 
-export default function workSpaceLayout({ onNavigate, chatId }) {
+export default function workSpaceLayout() {
+  const [updatedevents, setUpdatedEvents] = React.useState({});
   const chatBodyRef = React.useRef(null);
-  const [updatedevents , setUpdatedEvents]=React.useState({});
+  const [scrollToBottom, setScrollToBottomTrigger] = React.useState(false);
+  const lastProcessedIndexRef = React.useRef(0);
   const [assistantId, setAssistantId] = React.useState(DEFAULT_ASSISTANT_ID);
   const [showAssistantChooser, setShowAssistantChooser] = React.useState(false);
   const [isLeftCollapsed, setIsLeftCollapsed] = React.useState(false);
@@ -419,6 +451,8 @@ export default function workSpaceLayout({ onNavigate, chatId }) {
     const stored = window.localStorage.getItem("tas-theme");
     return stored === "dark" ? "dark" : "light";
   });
+  const location = useLocation();
+  const navigate = useNavigate();
   const [timelineSteps, setTimelineSteps] = React.useState(DEFAULT_TIMELINE_STEPS);
   const [streamError, setStreamError] = React.useState(null);
   const seenToolIdsRef = React.useRef(new Set());
@@ -430,9 +464,16 @@ export default function workSpaceLayout({ onNavigate, chatId }) {
   const previousToolCountRef = React.useRef(0);
   const previousUserMessageCountRef = React.useRef(0);
   const transitionTimeoutRef = React.useRef(null);
-  const previousChatIdRef = React.useRef(chatId ?? null);
   const lastThreadAssistantRef = React.useRef({ threadId: null, assistantId: null });
   const [isThreadTransitioning, setIsThreadTransitioning] = React.useState(false);
+  const [chatId, setChatId] = React.useState(null);
+  const previousChatIdRef = React.useRef(chatId ?? null);
+  useEffect(() => {
+    const pathParts = location.pathname.split("/");
+    if (pathParts.length >= 3 && pathParts[1] === "chat") {
+      setChatId(pathParts[2]);
+    }
+  }, [location.pathname])
 
   const storeActiveRunMeta = React.useCallback(
     (runMeta) => {
@@ -614,11 +655,11 @@ export default function workSpaceLayout({ onNavigate, chatId }) {
       }
       setActiveThreadId(threadId);
       setRefreshKey((prev) => prev + 1);
-      if (typeof onNavigate === "function" && threadId) {
-        onNavigate(`/chat/${threadId}`);
+      if (typeof navigate === "function" && threadId) {
+        navigate(`/chat/${threadId}`);
       }
     },
-    [onNavigate, activeThreadId, triggerThreadTransition],
+    [navigate, activeThreadId, triggerThreadTransition],
   );
 
   const upsertEntries = React.useCallback((setter) => {
@@ -779,6 +820,9 @@ export default function workSpaceLayout({ onNavigate, chatId }) {
       console.log("Stream created with run metadata:", runMeta);
       setUpdatedEvents(runMeta);
     },
+    onMetadataEvent: (metadata) => {
+      console.log("Stream created with run metadata:", metadata);
+    },
     onFinish: (_state, runMeta) => {
       if (runMeta?.run_id && activeRunRef.current?.run_id === runMeta.run_id) {
         activeRunRef.current = null;
@@ -825,7 +869,7 @@ export default function workSpaceLayout({ onNavigate, chatId }) {
 
   useEffect(() => {
     setIsRightCollapsed(true)
-  },[!activeThreadId])
+  }, [!activeThreadId])
 
   const cancelActiveRun = React.useCallback(
     async (runMeta) => {
@@ -1002,7 +1046,6 @@ export default function workSpaceLayout({ onNavigate, chatId }) {
   // new streamValues provide a replacement.
   React.useEffect(() => {
     if (!streamValues || typeof streamValues !== "object") return;
-    console.log("Checking for sandbox URL candidates to potentially clear override." , streamValues);
     const hasSandboxCandidate =
       typeof streamValues.sandbox_url === "string" && streamValues.sandbox_url.trim().length > 0 ||
       typeof streamValues.sandboxUrl === "string" && streamValues.sandboxUrl.trim().length > 0 ||
@@ -1013,10 +1056,11 @@ export default function workSpaceLayout({ onNavigate, chatId }) {
     }
   }, [streamValues]);
 
-  const baseMessages = React.useMemo(
-    () => mapMessagesForDisplay(streamMessages, isLoading , custom),
-    [streamMessages, isLoading],
-  );
+  const baseMessages = useIdleMemo(
+    () => mapMessagesForDisplay(streamMessages, isLoading, custom, updatedevents),
+    [streamMessages, isLoading, updatedevents],
+  ) ?? [];
+
   React.useEffect(() => {
     const userCount = baseMessages.reduce(
       (count, message) => (message?.role === "user" ? count + 1 : count),
@@ -1082,18 +1126,19 @@ export default function workSpaceLayout({ onNavigate, chatId }) {
       return baseMessagesCopy;
     }
 
-    return [
-      ...baseMessagesCopy,
-      {
-        id: "canvas-payload",
-        role: "assistant",
-        text: moduleText,
-        type: "canvas",
-        raw: { canvas: modulePayload },
-        generate_module: true,
-        __source: "canvas-payload",
-      },
-    ];
+    return baseMessagesCopy;
+    // return [
+    //   ...baseMessagesCopy,
+    //   {
+    //     id: "canvas-payload",
+    //     role: "assistant",
+    //     text: moduleText,
+    //     type: "canvas",
+    //     raw: { canvas: modulePayload },
+    //     generate_module: true,
+    //     __source: "canvas-payload",
+    //   },
+    // ];
   }, [baseMessages, streamValues]);
 
   const normalizedMessages = React.useMemo(() => {
@@ -1201,9 +1246,11 @@ export default function workSpaceLayout({ onNavigate, chatId }) {
   );
 
   React.useEffect(() => {
-    if (chatBodyRef.current) {
-      chatBodyRef.current.scrollTop = chatBodyRef.current.scrollHeight;
-    }
+    requestAnimationFrame(() => {
+      if (chatBodyRef.current) {
+        chatBodyRef.current.scrollTop = chatBodyRef.current.scrollHeight;
+      }
+    });
   }, [normalizedMessages]);
 
   const startNewChat = React.useCallback(() => {
@@ -1214,25 +1261,24 @@ export default function workSpaceLayout({ onNavigate, chatId }) {
     }
     triggerThreadTransition();
     setActiveThreadId(null);
-  // Reset assistant to default when starting a fresh chat
-  setAssistantId(DEFAULT_ASSISTANT_ID);
+    setAssistantId('agent');
     handleInputChange("");
     setSources([]);
-  // Collapse/hide right-side panel when starting a new chat
-  setIsRightCollapsed(true);
+    setChatId('');
+    setIsRightCollapsed(true);
     setRefreshKey((prev) => prev + 1);
     resetToolTracking();
     setStreamError(null);
     setShowAssistantChooser(false);
-  lastThreadAssistantRef.current = { threadId: null, assistantId: DEFAULT_ASSISTANT_ID };
-    if (typeof onNavigate === "function") {
-      onNavigate("/chat");
+    lastThreadAssistantRef.current = { threadId: null, assistantId: DEFAULT_ASSISTANT_ID };
+    if (typeof navigate === "function") {
+      navigate("/chat");
     }
   }, [
     isLoading,
     stop,
     resetToolTracking,
-    onNavigate,
+    navigate,
     triggerThreadTransition,
     handleInputChange,
   ]);
@@ -1476,8 +1522,15 @@ export default function workSpaceLayout({ onNavigate, chatId }) {
       }
     };
 
-    streamMessages.forEach(processMessage);
+    const start = lastProcessedIndexRef.current;
+    const nextMessages = streamMessages.slice(start);
+    nextMessages.forEach(processMessage);
+
+    lastProcessedIndexRef.current = streamMessages.length;
   }, [streamMessages, appendToolOutputs, toolScanVersion]);
+
+  const deferredMessages = React.useDeferredValue(normalizedMessages);
+
 
   const handleSend = React.useCallback(async () => {
     const trimmed = input.trim();
@@ -1622,12 +1675,12 @@ export default function workSpaceLayout({ onNavigate, chatId }) {
 
         <div className="flex min-h-0 flex-1 gap-3 overflow-hidden items-stretch">
           <div className="flex h-full flex-col">
-            <TopHeader theme={theme} isLeftCollapsed={isLeftCollapsed}  />
+            <TopHeader theme={theme} isLeftCollapsed={isLeftCollapsed} />
             <LeftSidebar
               theme={theme}
               isCollapsed={isLeftCollapsed}
               isLoading={isLoading}
-              onNavigate={onNavigate}
+              navigate={navigate}
               onOpenThread={handleThreadId}
               onStartNewChat={startNewChat}
               onToggleTheme={toggleTheme}
@@ -1643,7 +1696,7 @@ export default function workSpaceLayout({ onNavigate, chatId }) {
             updatedevents={updatedevents}
             input={input}
             isLoading={isLoading}
-            messages={normalizedMessages}
+            messages={deferredMessages}
             sandboxUrl={overrideSandboxUrl ?? sandboxUrl}
             onCopy={handleCopy}
             onDownload={handleDownload}
@@ -1666,7 +1719,7 @@ export default function workSpaceLayout({ onNavigate, chatId }) {
             theme={theme}
             timelineSteps={timelineSteps}
             isThinking={isLoading}
-            liveDemoMessages={normalizedMessages}
+            liveDemoMessages={deferredMessages}
             onToggleCollapse={toggleRightCollapse}
             toolOutputs={toolOutputs}
             sources={sources}
