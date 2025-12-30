@@ -66,6 +66,51 @@ export default function ChatSection({
     { id: "live_demo", label: "Live Demo", icon: <IoPlayCircleOutline size={18} />, description: "Interact with a live sandbox" },
   ];
 
+const handleDownload = React.useCallback((content) => {
+    if (!content) return;
+
+    // 1. Process Markdown to HTML for Word compatibility
+    let formattedContent = content
+      // Bold: **text** -> <b>text</b>
+      .replace(/\*\*(.*?)\*\*/g, '<b>$1</b>')
+      // Bullet points: - item -> <li>item</li>
+      .replace(/^\s*-\s+(.*)$/gm, '<li>$1</li>')
+      // Ensure list items are wrapped in <ul>
+      .replace(/(<li>.*<\/li>)/s, '<ul>$1</ul>')
+      // New lines to breaks
+      .replace(/\n/g, '<br/>');
+
+    // 2. CSS to match your frontend (Inter/Segoe UI and slate colors)
+    const cssStyles = `
+      <style>
+        body { font-family: 'Segoe UI', Arial, sans-serif; color: #334155; line-height: 1.6; padding: 40px; }
+        b { color: #0f172a; }
+        ul { margin-bottom: 15px; }
+        li { margin-bottom: 5px; }
+      </style>
+    `;
+
+    // 3. Construct Word-specific HTML Wrapper
+    const htmlContent = `
+      <html xmlns:o='urn:schemas-microsoft-com:office:office' xmlns:w='urn:schemas-microsoft-com:office:word' xmlns='http://www.w3.org/TR/REC-html40'>
+        <head><meta charset="utf-8">${cssStyles}</head>
+        <body>
+          ${formattedContent}
+        </body>
+      </html>
+    `;
+
+    const blob = new Blob([htmlContent], { type: "application/msword" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = `workspace_export_${Date.now()}.doc`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+  }, []);
+
   useEffect(() => {
     if (currentAssistantId) {
       const matched = slashOptions.find(opt => opt.id === currentAssistantId);
@@ -111,18 +156,6 @@ export default function ChatSection({
     navigator.clipboard.writeText(text);
     setCopiedMessageKey(key);
     setTimeout(() => setCopiedMessageKey(null), 2000);
-  };
-
-  const triggerDownload = (msg) => {
-    const blob = new Blob([msg.text], { type: "text/markdown" });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement("a");
-    link.href = url;
-    link.download = `training_content_${new Date().getTime()}.md`;
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-    URL.revokeObjectURL(url);
   };
 
   useEffect(() => {
@@ -309,7 +342,7 @@ export default function ChatSection({
                           </button>
 
                           <button
-                            onClick={() => triggerDownload(msg)}
+                            onClick={() => handleDownload(msg.text)}
                             className="text-[11px] font-medium text-zinc-500 hover:text-[var(--brand)]
                     flex items-center gap-1"
                           >
@@ -327,12 +360,12 @@ export default function ChatSection({
                       : "bg-white px-5 py-4 shadow-sm"
                       }`}
                   >
-                    { !isTrainingModule && ( <CopyIconButton
-                          className="absolute top-2 right-2 text-zinc-400 hover:text-[var(--brand)]
+                    {!isTrainingModule && (<CopyIconButton
+                      className="absolute top-2 right-2 text-zinc-400 hover:text-[var(--brand)]
                           opacity-0 group-hover:opacity-100
                           pointer-events-none group-hover:pointer-events-auto
                           transition-opacity duration-200"
-                        />)
+                    />)
                     }
 
                     <ReactMarkdown

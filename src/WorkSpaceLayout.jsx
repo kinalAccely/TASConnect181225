@@ -325,6 +325,21 @@ const MODULE_STREAM_RULES = {
   },
 };
 
+const shouldAcceptStreamingAssistant = () => {
+  if (assistantId === "agent") {
+    return (
+      updateEventKeys.includes("updates") ||
+      updateEventKeys.includes("result")
+    );
+  }
+
+  if (assistantId === "training_module_graph") {
+    return updateEventKeys.includes("aggregator");
+  }
+
+  return true;
+};
+
 
 const mapMessagesForDisplay = (
   streamMessages,
@@ -334,33 +349,17 @@ const mapMessagesForDisplay = (
   assistantId
 ) => {
   if (!Array.isArray(streamMessages)) return [];
+
   const updateEventKeys = Object.keys(updatedevents);
-
-  const shouldAcceptStreamingAssistant = () => {
-    if (assistantId === "agent") {
-      return (
-        updateEventKeys.includes("updates") ||
-        updateEventKeys.includes("result")
-      );
-    }
-
-    if (assistantId === "training_module_graph") {
-      return updateEventKeys.includes("aggregator");
-    }
-
-    return true;
-  };
-
   const normalized = [];
   let lastAssistantIndex = -1;
-  let streamingNormalizedIndex = -1;
 
   streamMessages.forEach((message, index) => {
     if (!message) return;
 
     const type = message.type ?? message.role;
 
-    // 🚫 Ignore tool events
+    // 🚫 Ignore tool events completely
     if (
       type === "tool" ||
       type === "tool_calls" ||
@@ -373,91 +372,87 @@ const mapMessagesForDisplay = (
     const role = resolveRole(message, "assistant");
     const rawText = extractMessageText(message);
     const trimmedText = rawText?.trim?.() ?? "";
+
     const isAssistant = role === "assistant" || role === "system";
-    const isLastMessage = index === streamMessages.length - 1;
-
-    /**
-     * 🔑 APPLY streaming-event-type FILTER ONLY FOR THE CURRENT STREAMING ASSISTANT MESSAGE
-     * Instead of consulting the global `updatedevents` keys here (which can be
-     * unrelated to the specific message and cause the whole history to appear
-     * empty when the stream provides only in-progress deltas), inspect the
-     * current message's own `type` and only filter that final streaming message.
-     */
-    const isStreamingAssistantMessage = isAssistant && isLastMessage && isLoading;
-    if (isStreamingAssistantMessage) {
-      // Determine whether the global updatedevents appear to be associated
-      // with this specific message (match run_id or thread_id where present).
-      const hasUpdatedEvents = updateEventKeys.length > 0;
-      const updatedRunId = updatedevents?.run_id ?? updatedevents?.run?.run_id;
-      const updatedThreadId =
-        updatedevents?.thread_id ?? updatedevents?.run?.thread_id;
-      const messageRunId = message?.run_id ?? message?.run?.run_id ?? message?.raw?.run_id;
-      const messageThreadId = message?.thread_id ?? message?.run?.thread_id ?? message?.raw?.thread_id;
-
-      const updatedeventsAssociated =
-        (updatedRunId && messageRunId && String(updatedRunId) === String(messageRunId)) ||
-        (updatedThreadId && messageThreadId && String(updatedThreadId) === String(messageThreadId));
-
-      if (hasUpdatedEvents && updatedeventsAssociated) {
-        // Use the stream-level updatedevents to decide acceptance (safe and scoped).
-        if (!shouldAcceptStreamingAssistant()) {
-          return; // skip this single in-progress message
-        }
-      }
-      
-      else {
-        // Fallback: events may be delivered on the message `type` field for some streams.
-        if (assistantId === "agent") {
-          if (!(updateEventKeys.includes("updates") || updateEventKeys.includes("result"))) {
-            return;
-          }
-        } 
-        
-        else if (assistantId === "training_module_graph") {
-            if (!updateEventKeys.includes("aggregator")) {
-              return;
-            }
-        }
-      }
-    }
-
-    // Skip empty assistant messages ONLY for the current streaming assistant chunk.
-    // Preserve historical assistant messages even if their extracted text is
-    // temporarily empty to avoid flicker when the stream sends only deltas.
-    if (!trimmedText && role !== "user" && isStreamingAssistantMessage) {
+    // 🚫 HARD BLOCK internal nodes (history + streaming)
+    const internalModule =
+      message.generate_module ??
+      message?.raw?.generate_module ??
+      message?.type ??
+      updateEventKeys[0]
+    if (
+      internalModule === "retriever" ||
+      internalModule === "planner" ||
+      internalModule === "executor"
+    ) {
       return;
     }
-      normalized.push({
-        id: message.id ?? `${role}-${index}`,
-        role,
-        text: trimmedText || rawText,
-        type,
-        raw: message,
-        isStreaming: false,
-        assistant_id: assistantId,
-        generate_module: message.generate_module,
-      });
-      if (isAssistant) {
-        lastAssistantIndex = normalized.length - 1;
-        if (isLastMessage) {
-          // remember which normalized index corresponds to the streaming message
-          streamingNormalizedIndex = normalized.length - 1;
+
+    const isLastMessage = index === streamMessages.length - 1;
+    const isStreamingAssistant =
+      isAssistant && isLastMessage && isLoading;
+
+    /**
+     * =====================================================
+     * 🔑 STREAM FILTER — ONLY CURRENT STREAMING MESSAGE
+     * =====================================================
+     */
+    if (isStreamingAssistant) {
+      if (assistantId === "agent") {
+        if (
+          !(
+            updateEventKeys.includes("updates") ||
+            updateEventKeys.includes("result")
+          )
+        ) {
+          return;
         }
       }
+
+      if (assistantId === "training_module_graph") {
+        if (!updateEventKeys.includes("aggregator")) {
+          return;
+        }
+      }
+
+      // Skip empty streaming chunks only
+      if (!trimmedText) return;
+    }
+
+    /**
+     * =====================================================
+     * ✅ HISTORY IS NEVER FILTERED
+     * =====================================================
+     */
+    normalized.push({
+      id: message.id ?? `${role}-${index}`,
+      role,
+      text: trimmedText || rawText,
+      type,
+      raw: message,
+      isStreaming: false,
+      assistant_id: assistantId,
+      generate_module: message.generate_module,
+    });
+
+    if (isAssistant) {
+      lastAssistantIndex = normalized.length - 1;
+    }
   });
 
   /**
-   * 🔄 Mark ONLY latest assistant as streaming
+   * 🔄 Mark ONLY the latest assistant as streaming
    */
-  if (isLoading && streamingNormalizedIndex >= 0) {
-    normalized[streamingNormalizedIndex] = {
-      ...normalized[streamingNormalizedIndex],
+  if (isLoading && lastAssistantIndex >= 0) {
+    normalized[lastAssistantIndex] = {
+      ...normalized[lastAssistantIndex],
       isStreaming: true,
     };
   }
 
   return normalized;
 };
+
 
 
 
@@ -1142,7 +1137,7 @@ export default function workSpaceLayout() {
 
   const baseMessages = useIdleMemo(
     () => mapMessagesForDisplay(streamMessages, isLoading, custom, updatedevents, assistantId),
-    [streamLength, streamLastKey, isLoading, updatedEventsKey, assistantId],
+    [streamLength, streamLastKey, isLoading, updatedevents, assistantId],
   ) ?? [];
 
   // Preserve a stable copy of base messages to avoid history flicker when the
