@@ -308,28 +308,59 @@ const extractMessageText = (message) => {
   return segments.join("\n\n");
 };
 
+const MODULE_STREAM_RULES = {
+  agent: {
+    acceptEvents: ["updates", "result"],
+    hideIntermediateAssistants: true,
+  },
+
+  training_module_graph: {
+    acceptEvents: ["aggregator"],
+    hideIntermediateAssistants: true,
+  },
+
+  default: {
+    acceptEvents: [],
+    hideIntermediateAssistants: false,
+  },
+};
+
+
 const mapMessagesForDisplay = (
   streamMessages,
   isLoading,
   custom,
-  updatedevents
+  updatedevents = {},
+  assistantId
 ) => {
   if (!Array.isArray(streamMessages)) return [];
+  const updateEventKeys = Object.keys(updatedevents);
 
-  const updateEventKey = Object.keys(updatedevents || {});
-  const shouldAcceptAssistantText =
-    updateEventKey.includes("updates") ||
-    updateEventKey.includes("result");
+  const shouldAcceptStreamingAssistant = () => {
+    if (assistantId === "agent") {
+      return (
+        updateEventKeys.includes("updates") ||
+        updateEventKeys.includes("result")
+      );
+    }
+
+    if (assistantId === "training_module_graph") {
+      return updateEventKeys.includes("aggregator");
+    }
+
+    return true;
+  };
 
   const normalized = [];
   let lastAssistantIndex = -1;
+  let streamingNormalizedIndex = -1;
 
   streamMessages.forEach((message, index) => {
     if (!message) return;
 
     const type = message.type ?? message.role;
 
-    // 🚫 Ignore tool-related events
+    // 🚫 Ignore tool events
     if (
       type === "tool" ||
       type === "tool_calls" ||
@@ -342,55 +373,92 @@ const mapMessagesForDisplay = (
     const role = resolveRole(message, "assistant");
     const rawText = extractMessageText(message);
     const trimmedText = rawText?.trim?.() ?? "";
-
     const isAssistant = role === "assistant" || role === "system";
     const isLastMessage = index === streamMessages.length - 1;
 
     /**
-     * 🔑 APPLY updatedEventKeys ONLY FOR STREAMING MESSAGE
+     * 🔑 APPLY streaming-event-type FILTER ONLY FOR THE CURRENT STREAMING ASSISTANT MESSAGE
+     * Instead of consulting the global `updatedevents` keys here (which can be
+     * unrelated to the specific message and cause the whole history to appear
+     * empty when the stream provides only in-progress deltas), inspect the
+     * current message's own `type` and only filter that final streaming message.
      */
-    if (
-      isAssistant &&
-      isLastMessage &&
-      isLoading &&               // streaming in progress
-      !shouldAcceptAssistantText // invalid stream event
-    ) {
+    const isStreamingAssistantMessage = isAssistant && isLastMessage && isLoading;
+    if (isStreamingAssistantMessage) {
+      // Determine whether the global updatedevents appear to be associated
+      // with this specific message (match run_id or thread_id where present).
+      const hasUpdatedEvents = updateEventKeys.length > 0;
+      const updatedRunId = updatedevents?.run_id ?? updatedevents?.run?.run_id;
+      const updatedThreadId =
+        updatedevents?.thread_id ?? updatedevents?.run?.thread_id;
+      const messageRunId = message?.run_id ?? message?.run?.run_id ?? message?.raw?.run_id;
+      const messageThreadId = message?.thread_id ?? message?.run?.thread_id ?? message?.raw?.thread_id;
+
+      const updatedeventsAssociated =
+        (updatedRunId && messageRunId && String(updatedRunId) === String(messageRunId)) ||
+        (updatedThreadId && messageThreadId && String(updatedThreadId) === String(messageThreadId));
+
+      if (hasUpdatedEvents && updatedeventsAssociated) {
+        // Use the stream-level updatedevents to decide acceptance (safe and scoped).
+        if (!shouldAcceptStreamingAssistant()) {
+          return; // skip this single in-progress message
+        }
+      }
+      
+      else {
+        // Fallback: events may be delivered on the message `type` field for some streams.
+        if (assistantId === "agent") {
+          if (!(updateEventKeys.includes("updates") || updateEventKeys.includes("result"))) {
+            return;
+          }
+        } 
+        
+        else if (assistantId === "training_module_graph") {
+            if (!updateEventKeys.includes("aggregator")) {
+              return;
+            }
+        }
+      }
+    }
+
+    // Skip empty assistant messages ONLY for the current streaming assistant chunk.
+    // Preserve historical assistant messages even if their extracted text is
+    // temporarily empty to avoid flicker when the stream sends only deltas.
+    if (!trimmedText && role !== "user" && isStreamingAssistantMessage) {
       return;
     }
-
-    // Skip empty assistant messages
-    if (!trimmedText && role !== "user") {
-      return;
-    }
-
-    const normalizedMessage = {
-      id: message.id ?? `${role}-${index}`,
-      role,
-      text: trimmedText || rawText,
-      type,
-      raw: message,
-      isStreaming: false,
-    };
-
-    normalized.push(normalizedMessage);
-
-    if (isAssistant) {
-      lastAssistantIndex = normalized.length - 1;
-    }
+      normalized.push({
+        id: message.id ?? `${role}-${index}`,
+        role,
+        text: trimmedText || rawText,
+        type,
+        raw: message,
+        isStreaming: false,
+        assistant_id: assistantId,
+        generate_module: message.generate_module,
+      });
+      if (isAssistant) {
+        lastAssistantIndex = normalized.length - 1;
+        if (isLastMessage) {
+          // remember which normalized index corresponds to the streaming message
+          streamingNormalizedIndex = normalized.length - 1;
+        }
+      }
   });
 
   /**
-   * 🔄 Mark only the latest assistant message as streaming
+   * 🔄 Mark ONLY latest assistant as streaming
    */
-  if (isLoading && lastAssistantIndex >= 0) {
-    normalized[lastAssistantIndex] = {
-      ...normalized[lastAssistantIndex],
+  if (isLoading && streamingNormalizedIndex >= 0) {
+    normalized[streamingNormalizedIndex] = {
+      ...normalized[streamingNormalizedIndex],
       isStreaming: true,
     };
   }
 
   return normalized;
 };
+
 
 
 const resolveStageFromValues = (values) => {
@@ -824,6 +892,7 @@ export default function workSpaceLayout() {
       console.log("Stream created with run metadata:", metadata);
     },
     onFinish: (_state, runMeta) => {
+      setUpdatedEvents([]);
       if (runMeta?.run_id && activeRunRef.current?.run_id === runMeta.run_id) {
         activeRunRef.current = null;
       }
@@ -1056,10 +1125,67 @@ export default function workSpaceLayout() {
     }
   }, [streamValues]);
 
+  // Avoid re-running the expensive mapper on every render by depending on
+  // a small, stable set of keys: the stream length and the last message id
+  // (or type), plus a compact key for updatedevents and the assistantId.
+  const streamLength = Array.isArray(streamMessages) ? streamMessages.length : 0;
+  const streamLastKey =
+    streamLength > 0
+      ? streamMessages[streamLength - 1]?.id ?? streamMessages[streamLength - 1]?.type ?? streamLength
+      : 0;
+  const updatedEventsKey =
+    updatedevents && (typeof updatedevents.run_id === "string"
+      ? updatedevents.run_id
+      : typeof updatedevents.type === "string"
+        ? updatedevents.type
+        : Object.keys(updatedevents).join(","));
+
   const baseMessages = useIdleMemo(
-    () => mapMessagesForDisplay(streamMessages, isLoading, custom, updatedevents),
-    [streamMessages, isLoading, updatedevents],
+    () => mapMessagesForDisplay(streamMessages, isLoading, custom, updatedevents, assistantId),
+    [streamLength, streamLastKey, isLoading, updatedEventsKey, assistantId],
   ) ?? [];
+
+  // Preserve a stable copy of base messages to avoid history flicker when the
+  // stream delivers only incremental deltas (which may cause `baseMessages`
+  // to be temporarily shorter). We only merge/replace the final assistant
+  // entry during streaming so historical messages remain stable.
+  const stableBaseRef = React.useRef([]);
+  const stableBaseMessages = React.useMemo(() => {
+    if (!Array.isArray(baseMessages)) {
+      return stableBaseRef.current ?? [];
+    }
+
+    // When not streaming, trust the computed baseMessages and snapshot them.
+    if (!isLoading) {
+      stableBaseRef.current = baseMessages;
+      return baseMessages;
+    }
+
+    // While streaming, if the incoming mapper returned nothing but we have
+    // previously rendered history, keep the previous history intact.
+    if (baseMessages.length === 0 && (stableBaseRef.current ?? []).length > 0) {
+      return stableBaseRef.current;
+    }
+
+    // If mapper returned fewer messages than our stable copy, preserve history
+    // but replace the last entry if the mapper is providing a streaming assistant
+    // chunk (so the UI still shows the in-progress text for the current run).
+    const prev = stableBaseRef.current ?? [];
+    if (baseMessages.length < prev.length && prev.length > 0) {
+      const lastOfBase = baseMessages[baseMessages.length - 1];
+      if (lastOfBase && lastOfBase.isStreaming) {
+        const merged = [...prev];
+        merged[merged.length - 1] = lastOfBase;
+        stableBaseRef.current = merged;
+        return merged;
+      }
+      return prev;
+    }
+
+    // Default: accept new baseMessages and snapshot them.
+    stableBaseRef.current = baseMessages;
+    return baseMessages;
+  }, [baseMessages, isLoading]);
 
   React.useEffect(() => {
     const userCount = baseMessages.reduce(
@@ -1080,7 +1206,7 @@ export default function workSpaceLayout() {
   }, [activeThreadId]);
 
   const messagesWithCanvas = React.useMemo(() => {
-    const baseMessagesCopy = [...baseMessages];
+    const baseMessagesCopy = [...stableBaseMessages];
     const modulePayload =
       streamValues && typeof streamValues === "object"
         ? streamValues.canvas ??
@@ -1139,7 +1265,7 @@ export default function workSpaceLayout() {
     //     __source: "canvas-payload",
     //   },
     // ];
-  }, [baseMessages, streamValues]);
+  }, [stableBaseMessages, streamValues]);
 
   const normalizedMessages = React.useMemo(() => {
     if (pendingMessages.length === 0) {
@@ -1261,6 +1387,7 @@ export default function workSpaceLayout() {
     }
     triggerThreadTransition();
     setActiveThreadId(null);
+    setUpdatedEvents([]);
     setAssistantId('agent');
     handleInputChange("");
     setSources([]);

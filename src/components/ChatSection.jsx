@@ -174,10 +174,6 @@ export default function ChatSection({
     strong: ({ node, ...props }) => <strong className="font-bold text-zinc-900" {...props} />,
   };
 
-  useEffect(() => {
-    console.log("Messages updated in ChatSection:", messages);
-  }, [messages])
-
   const normalizedSandbox =
     sandboxUrl ? normalizeSandboxUrl(sandboxUrl) : null;
 
@@ -226,43 +222,46 @@ export default function ChatSection({
             </div>
           )}
 
-          {/* Updated CHAT MESSAGES LOGIC */}
+          {/* ================= CHAT MESSAGES ================= */}
           {messages.map((msg, idx) => {
-            const isUser = msg.role === "user";
             const msgId = msg.id || `msg-${idx}`;
+            const isUser = msg.role === "user";
 
-            const currentMsgAssistantId =
+            const currentAssistantId =
               msg.assistant_id || propsAssistantId || activeModule?.id;
 
             const isTrainingModule =
-              currentMsgAssistantId === "training_module_graph";
+              currentAssistantId === "training_module_graph";
 
-            const shouldRenderTraining =
-              isTrainingModule &&
-              (
-                (updateEventKey?.length > 0 && updateEventKey.includes("aggregator")) ||
-                !msg.generate_module
-              );
+            const isAgent = currentAssistantId === "agent";
+            const isLiveDemo = activeModule?.id === "live_demo";
+
+            /* ================= COPY BUTTON ================= */
+            const CopyIconButton = ({ className }) => (
+              <button
+                onClick={() => handleCopy(msg.text, msgId)}
+                className={className}
+              >
+                {copiedMessageKey === msgId ? (
+                  <IoCheckmark size={14} className="text-green-500" />
+                ) : (
+                  <IoCopyOutline size={14} />
+                )}
+              </button>
+            );
 
             /* ================= USER MESSAGE ================= */
             if (isUser) {
               return (
                 <div key={msgId} className="flex w-full justify-end mt-[5px]">
                   <div className="group relative max-w-[75%] rounded-2xl border border-[var(--brand-light)] bg-[var(--brand-lighter)] px-4 py-3 text-[13px] text-zinc-800 shadow-sm">
-                    <button
-                      onClick={() => handleCopy(msg.text, msgId)}
-                      className="absolute top-2 right-2 flex items-center gap-1 text-[11px] font-medium
+                    <CopyIconButton
+                      className="absolute top-2 right-2 flex items-center gap-1 text-[11px]
               text-zinc-400 hover:text-[var(--brand)]
               opacity-0 group-hover:opacity-100
               pointer-events-none group-hover:pointer-events-auto
               transition-opacity duration-200"
-                    >
-                      {copiedMessageKey === msgId ? (
-                        <IoCheckmark size={14} className="text-green-500" />
-                      ) : (
-                        <IoCopyOutline size={14} />
-                      )}
-                    </button>
+                    />
 
                     <p className="whitespace-pre-wrap break-words">
                       {msg.text}
@@ -272,26 +271,34 @@ export default function ChatSection({
               );
             }
 
-            /* ================= ASSISTANT / TRAINING ================= */
-            if ((shouldRenderTraining || !isTrainingModule) && activeModule?.id !== "live_demo") {
-              return (
-                <div key={msgId} className="flex flex-col gap-4">
-                  <div
-                    className={`${shouldRenderTraining
-                        ? "w-full max-w-5xl mx-auto"
-                        : "max-w-[85%]"
-                      } flex flex-col gap-2`}
-                  >
-                    {shouldRenderTraining && (
-                      <div className="flex items-center justify-between px-2">
-                        <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest">
-                          {/* Training Canvas */}
-                        </span>
+            /* ================= ASSISTANT ================= */
+            if (isLiveDemo) return null;
 
-                        <div className="flex gap-4">
+            return (
+              <div key={msgId} className="flex flex-col gap-4">
+                <div
+                  className={`flex flex-col gap-2 ${isTrainingModule
+                    ? "w-full max-w-5xl mx-auto"
+                    : "max-w-[85%]"
+                    }`}
+                >
+                  {/* ===== HEADER ACTIONS ===== */}
+                  {(isTrainingModule || isAgent) && (
+                    <div className="flex items-center justify-end px-2 gap-4">
+                      {/* Agent → icon-only copy */}
+                      {/* {isAgent && (
+                        <CopyIconButton
+                          className="text-zinc-500 hover:text-[var(--brand)]"
+                        />
+                      )} */}
+
+                      {/* Training → copy + download */}
+                      {isTrainingModule && (
+                        <>
                           <button
                             onClick={() => handleCopy(msg.text, msgId)}
-                            className="text-[11px] font-medium text-zinc-500 hover:text-[var(--brand)] flex items-center gap-1"
+                            className="text-[11px] font-medium text-zinc-500 hover:text-[var(--brand)]
+                    flex items-center gap-1"
                           >
                             {copiedMessageKey === msgId ? (
                               <IoCheckmark size={14} className="text-green-500" />
@@ -303,56 +310,50 @@ export default function ChatSection({
 
                           <button
                             onClick={() => triggerDownload(msg)}
-                            className="text-[11px] font-medium text-zinc-500 hover:text-[var(--brand)] flex items-center gap-1"
+                            className="text-[11px] font-medium text-zinc-500 hover:text-[var(--brand)]
+                    flex items-center gap-1"
                           >
                             <IoDownloadOutline size={14} /> Download
                           </button>
-                        </div>
-                      </div>
-                    )}
-
-                    <div
-                      className={`${shouldRenderTraining
-                          ? "group min-h-[300px] border-2 bg-zinc-50/30 p-8 shadow-inner"
-                          : "group bg-white border px-5 py-4 shadow-sm"
-                        } rounded-2xl border-zinc-200 text-[13.5px] text-zinc-700 relative`}
-                    >
-                      <button
-                        onClick={() => handleCopy(msg.text, msgId)}
-                        className="absolute top-2 right-2 flex items-center gap-1 text-[11px] font-medium
-                text-zinc-400 hover:text-[var(--brand)]
-                opacity-0 group-hover:opacity-100
-                pointer-events-none group-hover:pointer-events-auto
-                transition-opacity duration-200"
-                      >
-                        {copiedMessageKey === msgId ? (
-                          <IoCheckmark size={14} className="text-green-500" />
-                        ) : (
-                          <IoCopyOutline size={14} />
-                        )}
-                      </button>
-
-                      <ReactMarkdown
-                        remarkPlugins={[remarkGfm]}
-                        components={markdownComponents}
-                      >
-                        {msg.text || ""}
-                      </ReactMarkdown>
-
-                      {/* 🔹 Optional streaming cursor */}
-                      {msg.isStreaming && (
-                        <span className="inline-block ml-1 animate-pulse text-zinc-400">
-                          ▍
-                        </span>
+                        </>
                       )}
                     </div>
+                  )}
+
+                  {/* ===== MESSAGE BODY ===== */}
+                  <div
+                    className={`group relative rounded-2xl border border-zinc-200 text-[13.5px] text-zinc-700 ${isTrainingModule
+                      ? "min-h-[300px] border-2 bg-zinc-50/30 p-8 shadow-inner"
+                      : "bg-white px-5 py-4 shadow-sm"
+                      }`}
+                  >
+                    { !isTrainingModule && ( <CopyIconButton
+                          className="absolute top-2 right-2 text-zinc-400 hover:text-[var(--brand)]
+                          opacity-0 group-hover:opacity-100
+                          pointer-events-none group-hover:pointer-events-auto
+                          transition-opacity duration-200"
+                        />)
+                    }
+
+                    <ReactMarkdown
+                      remarkPlugins={[remarkGfm]}
+                      components={markdownComponents}
+                    >
+                      {msg.text || ""}
+                    </ReactMarkdown>
+
+                    {msg.isStreaming && (
+                      <span className="inline-block ml-1 animate-pulse text-zinc-400">
+                        ▍
+                      </span>
+                    )}
                   </div>
                 </div>
-              );
-            }
-
-            return null;
+              </div>
+            );
           })}
+
+
 
           {sandboxUrlLink && activeModule.id == 'live_demo' && !isNewChatRoute && (
             <div className="w-full h-[400px] border border-zinc-200 rounded-2xl overflow-hidden shadow-sm">
