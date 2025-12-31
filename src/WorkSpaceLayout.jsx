@@ -1,4 +1,4 @@
-import React, { useEffect } from "react";
+import React, { useEffect, useState } from "react";
 import LeftSidebar from "./components/LeftSidebar.jsx";
 import ChatSection from "./components/ChatSection.jsx";
 import RightSidebar from "./components/RightSidebar.jsx";
@@ -62,7 +62,8 @@ const extractAssistantIdFromThread = (thread) => {
   return resolveAssistantId(match);
 };
 
-const UNIFIED_STREAM_MODES = ["messages-tuple", "values", "modules", "metadata", "custom", "updates"];
+const UNIFIED_STREAM_MODES = ["messages", "modules", "metadata", "custom", "updates"];
+// const UNIFIED_STREAM_MODES = ["messages-tuple", "messages", "metadata", "custom", "updates"];
 const TEXTUAL_CONTENT_TYPES = new Set([
   "text",
   "output_text",
@@ -346,10 +347,11 @@ const mapMessagesForDisplay = (
   isLoading,
   custom,
   updatedevents = {},
-  assistantId
+  assistantId,
+  customMsg
 ) => {
   if (!Array.isArray(streamMessages)) return [];
-
+  console.log(customMsg, streamMessages);
   const updateEventKeys = Object.keys(updatedevents);
   const normalized = [];
   let lastAssistantIndex = -1;
@@ -373,17 +375,13 @@ const mapMessagesForDisplay = (
     const rawText = extractMessageText(message);
     const trimmedText = rawText?.trim?.() ?? "";
 
-    const isAssistant = role === "assistant" || role === "system";
+    const isAssistant = role === "assistant" || role === "system" || role == 'ai';
     // 🚫 HARD BLOCK internal nodes (history + streaming)
-    const internalModule =
-      message.generate_module ??
-      message?.raw?.generate_module ??
-      message?.type ??
-      updateEventKeys[0]
+    const internalModule = customMsg?.stage;
     if (
-      internalModule === "retriever" ||
-      internalModule === "planner" ||
-      internalModule === "executor"
+      (internalModule === "retriever" ||
+        internalModule === "planner" ||
+        internalModule === "executor") && isAssistant && index == streamMessages.length - 1
     ) {
       return;
     }
@@ -454,8 +452,6 @@ const mapMessagesForDisplay = (
 };
 
 
-
-
 const resolveStageFromValues = (values) => {
   if (!values || typeof values !== "object") {
     return {
@@ -492,6 +488,7 @@ const resolveStageFromValues = (values) => {
 
 export default function workSpaceLayout() {
   const [updatedevents, setUpdatedEvents] = React.useState({});
+  const [customMsg, setCustomMsg] = useState({});
   const chatBodyRef = React.useRef(null);
   const [scrollToBottom, setScrollToBottomTrigger] = React.useState(false);
   const lastProcessedIndexRef = React.useRef(0);
@@ -507,6 +504,7 @@ export default function workSpaceLayout() {
   const [refreshKey, setRefreshKey] = React.useState(0);
   const [overrideSandboxUrl, setOverrideSandboxUrl] = React.useState(undefined);
   const [toolScanVersion, setToolScanVersion] = React.useState(0);
+  const [scrollTrigger, setScrollTrigger] = React.useState(0);
   const [theme, setTheme] = React.useState(() => {
     if (typeof window === "undefined") {
       return "light";
@@ -873,18 +871,15 @@ export default function workSpaceLayout() {
     threadId: activeThreadId,
     streamMode: UNIFIED_STREAM_MODES,
     onThreadId: handleThreadId,
-    fetchStateHistory: true,
+    fetchStateHistory: false,
     reconnectOnMount: false,
     onCreated: (runMeta) => {
+      setNewChat(false);
       console.log("Stream created with run metadata:", runMeta);
       storeActiveRunMeta(runMeta);
     },
     onUpdateEvent: (runMeta) => {
-      console.log("Stream created with run metadata:", runMeta);
       setUpdatedEvents(runMeta);
-    },
-    onMetadataEvent: (metadata) => {
-      console.log("Stream created with run metadata:", metadata);
     },
     onFinish: (_state, runMeta) => {
       setUpdatedEvents([]);
@@ -911,11 +906,11 @@ export default function workSpaceLayout() {
         }
       }
     },
+
     onCustomEvent: (event) => {
+      console.log("event", event);
+      setCustomMsg(event);
       handleCustomEvent(event);
-    },
-    onMetadataEvent: (metadata) => {
-      handleMetadataEvent(metadata);
     },
     onError: (streamError, runMeta) => {
       console.error("LangGraph stream error:", streamError);
@@ -930,6 +925,7 @@ export default function workSpaceLayout() {
       setStreamError(friendlyMessage);
     },
   });
+
 
   useEffect(() => {
     setIsRightCollapsed(true)
@@ -1135,147 +1131,155 @@ export default function workSpaceLayout() {
         ? updatedevents.type
         : Object.keys(updatedevents).join(","));
 
-  const baseMessages = useIdleMemo(
-    () => mapMessagesForDisplay(streamMessages, isLoading, custom, updatedevents, assistantId),
-    [streamLength, streamLastKey, isLoading, updatedevents, assistantId],
-  ) ?? [];
+  // const baseMessages = useIdleMemo(
+  //   () => mapMessagesForDisplay(streamMessages, isLoading, custom, updatedevents, assistantId, customMsg),
+  //   [streamLength, streamLastKey, isLoading, updatedevents, assistantId, customMsg],
+  // ) ?? [];
 
   // Preserve a stable copy of base messages to avoid history flicker when the
   // stream delivers only incremental deltas (which may cause `baseMessages`
   // to be temporarily shorter). We only merge/replace the final assistant
   // entry during streaming so historical messages remain stable.
-  const stableBaseRef = React.useRef([]);
-  const stableBaseMessages = React.useMemo(() => {
-    if (!Array.isArray(baseMessages)) {
-      return stableBaseRef.current ?? [];
-    }
+  // const stableBaseRef = React.useRef([]);
+  // const stableBaseMessages = React.useMemo(() => {
+  //   if (!Array.isArray(baseMessages)) {
+  //     return stableBaseRef.current ?? [];
+  //   }
 
-    // When not streaming, trust the computed baseMessages and snapshot them.
-    if (!isLoading) {
-      stableBaseRef.current = baseMessages;
-      return baseMessages;
-    }
+  //   // When not streaming, trust the computed baseMessages and snapshot them.
+  //   if (!isLoading) {
+  //     stableBaseRef.current = baseMessages;
+  //     return baseMessages;
+  //   }
 
-    // While streaming, if the incoming mapper returned nothing but we have
-    // previously rendered history, keep the previous history intact.
-    if (baseMessages.length === 0 && (stableBaseRef.current ?? []).length > 0) {
-      return stableBaseRef.current;
-    }
+  //   // While streaming, if the incoming mapper returned nothing but we have
+  //   // previously rendered history, keep the previous history intact.
+  //   if (baseMessages.length === 0 && (stableBaseRef.current ?? []).length > 0) {
+  //     return stableBaseRef.current;
+  //   }
 
-    // If mapper returned fewer messages than our stable copy, preserve history
-    // but replace the last entry if the mapper is providing a streaming assistant
-    // chunk (so the UI still shows the in-progress text for the current run).
-    const prev = stableBaseRef.current ?? [];
-    if (baseMessages.length < prev.length && prev.length > 0) {
-      const lastOfBase = baseMessages[baseMessages.length - 1];
-      if (lastOfBase && lastOfBase.isStreaming) {
-        const merged = [...prev];
-        merged[merged.length - 1] = lastOfBase;
-        stableBaseRef.current = merged;
-        return merged;
-      }
-      return prev;
-    }
+  //   // If mapper returned fewer messages than our stable copy, preserve history
+  //   // but replace the last entry if the mapper is providing a streaming assistant
+  //   // chunk (so the UI still shows the in-progress text for the current run).
+  //   const prev = stableBaseRef.current ?? [];
+  //   if (baseMessages.length < prev.length && prev.length > 0) {
+  //     const lastOfBase = baseMessages[baseMessages.length - 1];
+  //     if (lastOfBase && lastOfBase.isStreaming) {
+  //       const merged = [...prev];
+  //       merged[merged.length - 1] = lastOfBase;
+  //       stableBaseRef.current = merged;
+  //       return merged;
+  //     }
+  //     return prev;
+  //   }
 
-    // Default: accept new baseMessages and snapshot them.
-    stableBaseRef.current = baseMessages;
-    return baseMessages;
-  }, [baseMessages, isLoading]);
+  //   // Default: accept new baseMessages and snapshot them.
+  //   stableBaseRef.current = baseMessages;
+  //   return baseMessages;
+  // }, [baseMessages, isLoading]);
 
-  React.useEffect(() => {
-    const userCount = baseMessages.reduce(
-      (count, message) => (message?.role === "user" ? count + 1 : count),
-      0,
-    );
-    const previousCount = previousUserMessageCountRef.current;
-    if (userCount > previousCount && pendingMessages.length > 0) {
-      const delta = userCount - previousCount;
-      setPendingMessages((prev) => prev.slice(delta));
-    }
-    previousUserMessageCountRef.current = userCount;
-  }, [baseMessages, pendingMessages.length]);
+  // React.useEffect(() => {
+  //   const userCount = baseMessages.reduce(
+  //     (count, message) => (message?.role === "user" ? count + 1 : count),
+  //     0,
+  //   );
+  //   const previousCount = previousUserMessageCountRef.current;
+  //   if (userCount > previousCount && pendingMessages.length > 0) {
+  //     const delta = userCount - previousCount;
+  //     setPendingMessages((prev) => prev.slice(delta));
+  //   }
+  //   previousUserMessageCountRef.current = userCount;
+  // }, [baseMessages, pendingMessages.length]);
 
   React.useEffect(() => {
     previousUserMessageCountRef.current = 0;
     setPendingMessages((prev) => (prev.length === 0 ? prev : []));
   }, [activeThreadId]);
 
-  const messagesWithCanvas = React.useMemo(() => {
-    const baseMessagesCopy = [...stableBaseMessages];
-    const modulePayload =
-      streamValues && typeof streamValues === "object"
-        ? streamValues.canvas ??
-        streamValues.canvas_data ??
-        streamValues.module ??
-        streamValues.modules ??
-        undefined
-        : undefined;
+  // const messagesWithCanvas = React.useMemo(() => {
+    // const baseMessagesCopy = [...stableBaseMessages];
+    // const modulePayload =
+    //   streamValues && typeof streamValues === "object"
+    //     ? streamValues.canvas ??
+    //     streamValues.canvas_data ??
+    //     streamValues.module ??
+    //     streamValues.modules ??
+    //     undefined
+    //     : undefined;
 
-    if (!modulePayload) {
-      return baseMessagesCopy;
-    }
+    // if (!modulePayload) {
+    //   return baseMessagesCopy;
+    // }
 
-    let moduleText;
-    if (typeof modulePayload === "string") {
-      moduleText = modulePayload;
-    } else {
-      try {
-        moduleText = JSON.stringify(modulePayload, null, 2);
-        if (moduleText && moduleText.trim().length > 0) {
-          moduleText = `\`\`\`json\n${moduleText}\n\`\`\``;
-        }
-      } catch {
-        moduleText = String(modulePayload);
-      }
-    }
+    // let moduleText;
+    // if (typeof modulePayload === "string") {
+    //   moduleText = modulePayload;
+    // } 
+    // else {
+    //   try {
+    //     moduleText = JSON.stringify(modulePayload, null, 2);
+    //     if (moduleText && moduleText.trim().length > 0) {
+    //       moduleText = `\`\`\`json\n${moduleText}\n\`\`\``;
+    //     }
+    //   } catch {
+    //     moduleText = String(modulePayload);
+    //   }
+    // }
 
-    if (!moduleText || moduleText.trim().length === 0) {
-      return baseMessagesCopy;
-    }
+    // if (!moduleText || moduleText.trim().length === 0) {
+    //   return baseMessagesCopy;
+    // }
 
     // Only consider it already present when a previous canvas entry has the same rendered text.
     // Previously this flagged any `__source === 'canvas-payload'` as duplicate which prevented
     // appending multiple distinct canvases. Now we only dedupe identical payloads.
-    const alreadyPresent = baseMessagesCopy.some((msg) => {
-      if (!msg) return false;
-      if (msg?.__source === "canvas-payload" && msg.text === moduleText) return true;
-      if (msg?.raw?.canvas && msg.text === moduleText) return true;
-      return false;
-    });
+    // const alreadyPresent = baseMessagesCopy.some((msg) => {
+    //   if (!msg) return false;
+    //   if (msg?.__source === "canvas-payload" && msg.text === moduleText) return true;
+    //   if (msg?.raw?.canvas && msg.text === moduleText) return true;
+    //   return false;
+    // });
 
-    if (alreadyPresent) {
-      return baseMessagesCopy;
-    }
+    // if (alreadyPresent) {
+    //   return baseMessagesCopy;
+    // }
 
-    return baseMessagesCopy;
-    // return [
-    //   ...baseMessagesCopy,
-    //   {
-    //     id: "canvas-payload",
-    //     role: "assistant",
-    //     text: moduleText,
-    //     type: "canvas",
-    //     raw: { canvas: modulePayload },
-    //     generate_module: true,
-    //     __source: "canvas-payload",
-    //   },
-    // ];
-  }, [stableBaseMessages, streamValues]);
+  //   return stableBaseMessages;
+  //   // return [
+  //   //   ...baseMessagesCopy,
+  //   //   {
+  //   //     id: "canvas-payload",
+  //   //     role: "assistant",
+  //   //     text: moduleText,
+  //   //     type: "canvas",
+  //   //     raw: { canvas: modulePayload },
+  //   //     generate_module: true,
+  //   //     __source: "canvas-payload",
+  //   //   },
+  //   // ];
+  // }, [stableBaseMessages, streamValues]);
 
-  const normalizedMessages = React.useMemo(() => {
-    if (pendingMessages.length === 0) {
-      return messagesWithCanvas;
-    }
-    return [...messagesWithCanvas, ...pendingMessages];
-  }, [messagesWithCanvas, pendingMessages]);
+  const normalizedMessages = React.useMemo(
+    () =>
+      mapMessagesForDisplay(
+        streamMessages,
+        isLoading,
+        custom,
+        updatedevents,
+        assistantId,
+        customMsg
+      ),
+    [streamLength, streamLastKey, assistantId] // ✅
+  );
+  // if (pendingMessages.length === 0) {
+  //   return stableBaseMessages;
+  // }
+  // return [...stableBaseMessages, ...pendingMessages];
+  // }, [stableBaseMessages, pendingMessages]);
 
   // Treat the case where the only message is an assistant-switch system message
   // (we add these after selecting an assistant) as effectively empty so the
   // suggestion chooser can still show.
-  const hasOnlyAssistantSwitchMessage =
-    normalizedMessages.length === 1 &&
-    typeof normalizedMessages[0]?.id === "string" &&
-    normalizedMessages[0].id.startsWith("assistant-switch-");
 
   const shouldShowAssistantSuggestions = showAssistantChooser && !activeThreadId;
 
@@ -1368,13 +1372,15 @@ export default function workSpaceLayout() {
 
   React.useEffect(() => {
     requestAnimationFrame(() => {
-      if (chatBodyRef.current) {
+      if (chatBodyRef.current && !isNewChat) {
         chatBodyRef.current.scrollTop = chatBodyRef.current.scrollHeight;
       }
     });
   }, [normalizedMessages]);
 
+  const [isNewChat, setNewChat] = React.useState(false);
   const startNewChat = React.useCallback(() => {
+    setNewChat(true);
     if (isLoading && typeof stop === "function") {
       stop().catch((stopError) => {
         console.warn("Unable to stop active stream before reset:", stopError);
@@ -1653,6 +1659,11 @@ export default function workSpaceLayout() {
 
   const deferredMessages = React.useDeferredValue(normalizedMessages);
 
+  React.useEffect(() => {
+    if (activeThreadId && deferredMessages.length > 0) {
+      setScrollTrigger(prev => prev + 1);
+    }
+  }, [activeThreadId, deferredMessages.length]);
 
   const handleSend = React.useCallback(async () => {
     const trimmed = input.trim();
@@ -1818,7 +1829,7 @@ export default function workSpaceLayout() {
             updatedevents={updatedevents}
             input={input}
             isLoading={isLoading}
-            messages={deferredMessages}
+            messages={normalizedMessages}
             sandboxUrl={overrideSandboxUrl ?? sandboxUrl}
             onCopy={handleCopy}
             onDownload={handleDownload}

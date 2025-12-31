@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useRef, useEffect } from "react";
+import React, { useState, useMemo, useRef, useEffect , useCallback} from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from 'remark-gfm';
 import { useLocation } from "react-router-dom";
@@ -33,7 +33,7 @@ export default function ChatSection({
   assistantId: propsAssistantId,
   currentAssistantId
 }) {
-  const lastRenderedSandboxUrlRef = React.useRef(null);
+  const lastRenderedSandboxUrlRef = useRef(null);
   const shouldRenderSandbox = sandboxUrl && sandboxUrl !== lastRenderedSandboxUrlRef.current;
   const [sandboxUrlLink, setSandBoxUrl] = useState('');
   const location = useLocation();
@@ -43,7 +43,7 @@ export default function ChatSection({
       setSandBoxUrl(sandboxUrl);
     }
   }, [sandboxUrl])
-  const [updateEventKey, setUpdateEventKey] = React.useState([]);
+  const [updateEventKey, setUpdateEventKey] = useState([]);
   const normalizeSandboxUrl = (url) => {
     if (typeof url !== "string" || !url.trim()) return null;
     const trimmed = url.trim();
@@ -66,7 +66,7 @@ export default function ChatSection({
     { id: "live_demo", label: "Live Demo", icon: <IoPlayCircleOutline size={18} />, description: "Interact with a live sandbox" },
   ];
 
-const handleDownload = React.useCallback((content) => {
+const handleDownload = useCallback((content) => {
     if (!content) return;
 
     // 1. Process Markdown to HTML for Word compatibility
@@ -318,13 +318,6 @@ const handleDownload = React.useCallback((content) => {
                   {/* ===== HEADER ACTIONS ===== */}
                   {(isTrainingModule || isAgent) && (
                     <div className="flex items-center justify-end px-2 gap-4">
-                      {/* Agent → icon-only copy */}
-                      {/* {isAgent && (
-                        <CopyIconButton
-                          className="text-zinc-500 hover:text-[var(--brand)]"
-                        />
-                      )} */}
-
                       {/* Training → copy + download */}
                       {isTrainingModule && (
                         <>
@@ -375,17 +368,16 @@ const handleDownload = React.useCallback((content) => {
                       {msg.text || ""}
                     </ReactMarkdown>
 
-                    {msg.isStreaming && (
+                    {/* {msg.isStreaming && (
                       <span className="inline-block ml-1 animate-pulse text-zinc-400">
                         ▍
                       </span>
-                    )}
+                    )} */}
                   </div>
                 </div>
               </div>
             );
           })}
-
 
 
           {sandboxUrlLink && activeModule.id == 'live_demo' && !isNewChatRoute && (
