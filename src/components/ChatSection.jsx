@@ -21,9 +21,11 @@ export default function ChatSection({
   chatBodyRef,
   input,
   isLoading,
+  handleSubmit,
+  isStreamNewChat,
   messages = [],
   onInputChange,
-  onSend,
+  newStreamingList,
   onStop,
   onEditMessage,
   sandboxUrl,
@@ -124,26 +126,26 @@ const handleDownload = useCallback((content) => {
     setUpdateEventKey(Object.keys(updatedevents));
   }, [updatedevents])
 
-  const isNewChatRoute = useMemo(() => {
+  const isNewChat = useMemo(() => {
     const pathSegments = location.pathname.split('/').filter(Boolean);
     return pathSegments.length === 1 && pathSegments[0] === 'chat' && !threadId;
   }, [location.pathname, threadId]);
 
   const [activeModule, setActiveModule] = useState(() =>
-    isNewChatRoute ? slashOptions[0] : null
+    isNewChat ? slashOptions[0] : null
   );
 
   const [copiedMessageKey, setCopiedMessageKey] = useState(null);
   const textareaRef = useRef(null);
 
   useEffect(() => {
-    if (!isNewChatRoute && propsAssistantId) {
+    if (!isNewChat && propsAssistantId) {
       const matched = slashOptions.find(opt => opt.id === propsAssistantId);
       if (matched) setActiveModule(matched);
     } else {
       setShowScrollButton(false);
     }
-  }, [propsAssistantId, isNewChatRoute]);
+  }, [propsAssistantId, isNewChat]);
 
   useEffect(() => {
     if (!activeModule) {
@@ -165,7 +167,7 @@ const handleDownload = useCallback((content) => {
     }
   }, [input]);
 
-  const showSlashMenu = isNewChatRoute && messages.length === 0 && input.startsWith("/");
+  const showSlashMenu = isNewChat && newStreamingList.length === 0 && input.startsWith("/");
   const [showScrollButton, setShowScrollButton] = useState(false);
 
   const scrollToBottom = () => {
@@ -231,7 +233,7 @@ const handleDownload = useCallback((content) => {
           ref={chatBodyRef}
           className="flex-1 space-y-6 overflow-y-auto px-6 py-6 scroll-smooth"
         >
-          {isNewChatRoute && messages.length === 0 && !isLoading && (
+          {isStreamNewChat && newStreamingList.length === 0 && !isLoading && (
             <div className="flex h-full flex-col items-center justify-center text-center px-4 animate-in fade-in zoom-in-95 duration-700">
               <div className="mb-4 p-4 bg-zinc-50 rounded-full text-[var(--brand)]">
                 <IoSparklesOutline size={32} className="animate-pulse" />
@@ -247,7 +249,7 @@ const handleDownload = useCallback((content) => {
             </div>
           )}
 
-          {!isNewChatRoute && messages.length === 0 && isLoading && (
+          {!isStreamNewChat && newStreamingList.length === 0 && isLoading && (
             <div className="flex flex-col gap-4 p-4 animate-pulse">
               <div className="h-10 bg-zinc-100 rounded-2xl w-2/3 self-start" />
               <div className="h-10 bg-zinc-100 rounded-2xl w-1/2 self-end" />
@@ -256,9 +258,9 @@ const handleDownload = useCallback((content) => {
           )}
 
           {/* ================= CHAT MESSAGES ================= */}
-          {messages.map((msg, idx) => {
+          {newStreamingList.map((msg, idx) => {
             const msgId = msg.id || `msg-${idx}`;
-            const isUser = msg.role === "user";
+            const isUser = (msg.role === "user" || msg.role === "human");
 
             const currentAssistantId =
               msg.assistant_id || propsAssistantId || activeModule?.id;
@@ -297,7 +299,7 @@ const handleDownload = useCallback((content) => {
                     />
 
                     <p className="whitespace-pre-wrap break-words">
-                      {msg.text}
+                      {msg.content}
                     </p>
                   </div>
                 </div>
@@ -365,7 +367,7 @@ const handleDownload = useCallback((content) => {
                       remarkPlugins={[remarkGfm]}
                       components={markdownComponents}
                     >
-                      {msg.text || ""}
+                      {msg.content || ""}
                     </ReactMarkdown>
 
                     {/* {msg.isStreaming && (
@@ -380,7 +382,7 @@ const handleDownload = useCallback((content) => {
           })}
 
 
-          {sandboxUrlLink && activeModule.id == 'live_demo' && !isNewChatRoute && (
+          {sandboxUrlLink && activeModule.id == 'live_demo' && !isStreamNewChat && (
             <div className="w-full h-[400px] border border-zinc-200 rounded-2xl overflow-hidden shadow-sm">
               <iframe
                 src={normalizeSandboxUrl(sandboxUrlLink)}
@@ -397,7 +399,7 @@ const handleDownload = useCallback((content) => {
           )}
 
 
-          {isLoading && messages.length > 0 && (
+          {isLoading && newStreamingList.length > 0 && (
             <div className="flex justify-start">
               <div className="flex items-center gap-2 rounded-2xl border border-zinc-100 bg-white px-5 py-4 shadow-sm">
                 <div className="flex gap-1">
@@ -456,10 +458,10 @@ const handleDownload = useCallback((content) => {
                 onKeyDown={(e) =>
                   e.key === "Enter" &&
                   !e.shiftKey &&
-                  (e.preventDefault(), onSend())
+                  (e.preventDefault())
                 }
                 placeholder={
-                  isNewChatRoute && messages.length === 0
+                  isStreamNewChat && newStreamingList.length === 0
                     ? "Type / to change mode..."
                     : "Reply..."
                 }
@@ -467,7 +469,7 @@ const handleDownload = useCallback((content) => {
               />
 
               <button
-                onClick={isLoading ? onStop : onSend}
+                onClick={isLoading ? onStop : handleSubmit}
                 className="self-end mb-1 p-2.5 bg-[var(--brand)] text-white rounded-xl shadow-lg"
               >
                 {isLoading ? (

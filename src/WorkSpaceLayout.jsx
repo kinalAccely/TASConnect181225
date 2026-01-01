@@ -1,12 +1,12 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import LeftSidebar from "./components/LeftSidebar.jsx";
 import ChatSection from "./components/ChatSection.jsx";
 import RightSidebar from "./components/RightSidebar.jsx";
 import TopHeader from "./components/TopHeader.jsx";
 import { useStream } from "@langchain/langgraph-sdk/react";
-import { resolveAssistantId, fetchThreadById } from "./services/threadService.js";
+import { resolveAssistantId, fetchThreadById, getStreamMessages, createThread, threadHistory } from "./services/threadService.js";
 import { useIdleMemo } from "./utils/useIdleMemo.js";
-import { useLocation, useNavigate } from "react-router-dom";
+import { useLocation, useNavigate, useParams } from "react-router-dom";
 
 const DEFAULT_TIMELINE_STEPS = [
   "Load interactive preview",
@@ -351,7 +351,7 @@ const mapMessagesForDisplay = (
   customMsg
 ) => {
   if (!Array.isArray(streamMessages)) return [];
-  console.log(customMsg, streamMessages);
+  // console.log(customMsg, streamMessages);
   const updateEventKeys = Object.keys(updatedevents);
   const normalized = [];
   let lastAssistantIndex = -1;
@@ -514,6 +514,7 @@ export default function workSpaceLayout() {
   });
   const location = useLocation();
   const navigate = useNavigate();
+  const initialMessage = location.state?.initialMessage;
   const [timelineSteps, setTimelineSteps] = React.useState(DEFAULT_TIMELINE_STEPS);
   const [streamError, setStreamError] = React.useState(null);
   const seenToolIdsRef = React.useRef(new Set());
@@ -529,6 +530,8 @@ export default function workSpaceLayout() {
   const [isThreadTransitioning, setIsThreadTransitioning] = React.useState(false);
   const [chatId, setChatId] = React.useState(null);
   const previousChatIdRef = React.useRef(chatId ?? null);
+
+  const { chatId: threadChatId } = useParams();
   useEffect(() => {
     const pathParts = location.pathname.split("/");
     if (pathParts.length >= 3 && pathParts[1] === "chat") {
@@ -871,7 +874,7 @@ export default function workSpaceLayout() {
     threadId: activeThreadId,
     streamMode: UNIFIED_STREAM_MODES,
     onThreadId: handleThreadId,
-    fetchStateHistory: false,
+    fetchStateHistory: true,
     reconnectOnMount: false,
     onCreated: (runMeta) => {
       setNewChat(false);
@@ -1197,52 +1200,52 @@ export default function workSpaceLayout() {
   }, [activeThreadId]);
 
   // const messagesWithCanvas = React.useMemo(() => {
-    // const baseMessagesCopy = [...stableBaseMessages];
-    // const modulePayload =
-    //   streamValues && typeof streamValues === "object"
-    //     ? streamValues.canvas ??
-    //     streamValues.canvas_data ??
-    //     streamValues.module ??
-    //     streamValues.modules ??
-    //     undefined
-    //     : undefined;
+  // const baseMessagesCopy = [...stableBaseMessages];
+  // const modulePayload =
+  //   streamValues && typeof streamValues === "object"
+  //     ? streamValues.canvas ??
+  //     streamValues.canvas_data ??
+  //     streamValues.module ??
+  //     streamValues.modules ??
+  //     undefined
+  //     : undefined;
 
-    // if (!modulePayload) {
-    //   return baseMessagesCopy;
-    // }
+  // if (!modulePayload) {
+  //   return baseMessagesCopy;
+  // }
 
-    // let moduleText;
-    // if (typeof modulePayload === "string") {
-    //   moduleText = modulePayload;
-    // } 
-    // else {
-    //   try {
-    //     moduleText = JSON.stringify(modulePayload, null, 2);
-    //     if (moduleText && moduleText.trim().length > 0) {
-    //       moduleText = `\`\`\`json\n${moduleText}\n\`\`\``;
-    //     }
-    //   } catch {
-    //     moduleText = String(modulePayload);
-    //   }
-    // }
+  // let moduleText;
+  // if (typeof modulePayload === "string") {
+  //   moduleText = modulePayload;
+  // } 
+  // else {
+  //   try {
+  //     moduleText = JSON.stringify(modulePayload, null, 2);
+  //     if (moduleText && moduleText.trim().length > 0) {
+  //       moduleText = `\`\`\`json\n${moduleText}\n\`\`\``;
+  //     }
+  //   } catch {
+  //     moduleText = String(modulePayload);
+  //   }
+  // }
 
-    // if (!moduleText || moduleText.trim().length === 0) {
-    //   return baseMessagesCopy;
-    // }
+  // if (!moduleText || moduleText.trim().length === 0) {
+  //   return baseMessagesCopy;
+  // }
 
-    // Only consider it already present when a previous canvas entry has the same rendered text.
-    // Previously this flagged any `__source === 'canvas-payload'` as duplicate which prevented
-    // appending multiple distinct canvases. Now we only dedupe identical payloads.
-    // const alreadyPresent = baseMessagesCopy.some((msg) => {
-    //   if (!msg) return false;
-    //   if (msg?.__source === "canvas-payload" && msg.text === moduleText) return true;
-    //   if (msg?.raw?.canvas && msg.text === moduleText) return true;
-    //   return false;
-    // });
+  // Only consider it already present when a previous canvas entry has the same rendered text.
+  // Previously this flagged any `__source === 'canvas-payload'` as duplicate which prevented
+  // appending multiple distinct canvases. Now we only dedupe identical payloads.
+  // const alreadyPresent = baseMessagesCopy.some((msg) => {
+  //   if (!msg) return false;
+  //   if (msg?.__source === "canvas-payload" && msg.text === moduleText) return true;
+  //   if (msg?.raw?.canvas && msg.text === moduleText) return true;
+  //   return false;
+  // });
 
-    // if (alreadyPresent) {
-    //   return baseMessagesCopy;
-    // }
+  // if (alreadyPresent) {
+  //   return baseMessagesCopy;
+  // }
 
   //   return stableBaseMessages;
   //   // return [
@@ -1393,6 +1396,7 @@ export default function workSpaceLayout() {
     handleInputChange("");
     setSources([]);
     setChatId('');
+    setSearchedMessages([]);
     setIsRightCollapsed(true);
     setRefreshKey((prev) => prev + 1);
     resetToolTracking();
@@ -1657,7 +1661,7 @@ export default function workSpaceLayout() {
     lastProcessedIndexRef.current = streamMessages.length;
   }, [streamMessages, appendToolOutputs, toolScanVersion]);
 
-  const deferredMessages = React.useDeferredValue(normalizedMessages);
+  const deferredMessages = '';
 
   React.useEffect(() => {
     if (activeThreadId && deferredMessages.length > 0) {
@@ -1665,89 +1669,89 @@ export default function workSpaceLayout() {
     }
   }, [activeThreadId, deferredMessages.length]);
 
-  const handleSend = React.useCallback(async () => {
-    const trimmed = input.trim();
-    if (!trimmed || isLoading) {
-      return;
-    }
+  // const handleSend = React.useCallback(async () => {
+  //   const trimmed = input.trim();
+  //   if (!trimmed || isLoading) {
+  //     return;
+  //   }
 
-    // If the user typed a slash and there's no active thread, show suggestions and do not send
-    if (trimmed.startsWith("/") && !activeThreadId) {
-      setShowAssistantChooser(true);
-      setStreamError(null);
-      return;
-    }
+  //   // If the user typed a slash and there's no active thread, show suggestions and do not send
+  //   if (trimmed.startsWith("/") && !activeThreadId) {
+  //     setShowAssistantChooser(true);
+  //     setStreamError(null);
+  //     return;
+  //   }
 
-    // Existing slash-command behavior when a thread exists (or when resolving assistant by command)
-    if (trimmed.startsWith("/")) {
-      const slashMatch = trimmed.match(/^\/\s*([^\s]+)?/);
-      const commandKey = slashMatch?.[1];
-      if (!commandKey) {
-        setShowAssistantChooser(true);
-        setStreamError(null);
-        return;
-      }
-      const nextAssistantId = resolveAssistantId(`/${commandKey}`);
-      if (nextAssistantId) {
-        applyAssistantSelection(nextAssistantId);
-        setShowAssistantChooser(false);
-      }
-      handleInputChange("");
-      setStreamError(null);
-      return;
-    }
+  //   // Existing slash-command behavior when a thread exists (or when resolving assistant by command)
+  //   if (trimmed.startsWith("/")) {
+  //     const slashMatch = trimmed.match(/^\/\s*([^\s]+)?/);
+  //     const commandKey = slashMatch?.[1];
+  //     if (!commandKey) {
+  //       setShowAssistantChooser(true);
+  //       setStreamError(null);
+  //       return;
+  //     }
+  //     const nextAssistantId = resolveAssistantId(`/${commandKey}`);
+  //     if (nextAssistantId) {
+  //       applyAssistantSelection(nextAssistantId);
+  //       setShowAssistantChooser(false);
+  //     }
+  //     handleInputChange("");
+  //     setStreamError(null);
+  //     return;
+  //   }
 
-    if (!assistantId) {
-      return;
-    }
+  //   if (!assistantId) {
+  //     return;
+  //   }
 
-    const isExistingThread = Boolean(activeThreadId);
-    const clientMessageId = `pending-${Date.now()}-${Math.random().toString(16).slice(2)}`;
-    const pendingMessage = {
-      id: clientMessageId,
-      role: "user",
-      text: trimmed,
-      type: "user",
-      raw: { role: "user", content: trimmed },
-      isPending: true,
-    };
+  //   const isExistingThread = Boolean(activeThreadId);
+  //   const clientMessageId = `pending-${Date.now()}-${Math.random().toString(16).slice(2)}`;
+  //   const pendingMessage = {
+  //     id: clientMessageId,
+  //     role: "user",
+  //     text: trimmed,
+  //     type: "user",
+  //     raw: { role: "user", content: trimmed },
+  //     isPending: true,
+  //   };
 
-    handleInputChange("");
-    setSources([]);
-    setToolOutputs([]);
-    setPendingMessages((prev) => [...prev, pendingMessage]);
-    setStreamError(null);
-    try {
-      await submit(
-        {
-          messages: [
-            {
-              role: "user",
-              content: trimmed,
-            },
-          ],
-        },
-        {
-          metadata: isExistingThread
-            ? undefined
-            : { thread_name: trimmed, assistant_id: assistantId, graph_id: assistantId },
-          streamMode: UNIFIED_STREAM_MODES,
-          streamResumable: true,
-          streamSubgraphs: true,
-          threadId: activeThreadId ?? undefined,
-          onDisconnect: "cancel",
-          config: { recursion_limit: 100 }
-        },
-      );
-      setRefreshKey((prev) => prev + 1);
-    } catch (submitError) {
-      console.error("Failed to submit message:", submitError);
-      setPendingMessages((prev) =>
-        prev.filter((message) => message.id !== clientMessageId),
-      );
-      handleInputChange(trimmed);
-    }
-  }, [input, isLoading, submit, activeThreadId, assistantId, applyAssistantSelection, handleInputChange]);
+  //   handleInputChange("");
+  //   setSources([]);
+  //   setToolOutputs([]);
+  //   setPendingMessages((prev) => [...prev, pendingMessage]);
+  //   setStreamError(null);
+  //   try {
+  //     await submit(
+  //       {
+  //         messages: [
+  //           {
+  //             role: "user",
+  //             content: trimmed,
+  //           },
+  //         ],
+  //       },
+  //       {
+  //         metadata: isExistingThread
+  //           ? undefined
+  //           : { thread_name: trimmed, assistant_id: assistantId, graph_id: assistantId },
+  //         streamMode: UNIFIED_STREAM_MODES,
+  //         streamResumable: true,
+  //         streamSubgraphs: true,
+  //         threadId: activeThreadId ?? undefined,
+  //         onDisconnect: "cancel",
+  //         config: { recursion_limit: 100 }
+  //       },
+  //     );
+  //     setRefreshKey((prev) => prev + 1);
+  //   } catch (submitError) {
+  //     console.error("Failed to submit message:", submitError);
+  //     setPendingMessages((prev) =>
+  //       prev.filter((message) => message.id !== clientMessageId),
+  //     );
+  //     handleInputChange(trimmed);
+  //   }
+  // }, [input, isLoading, submit, activeThreadId, assistantId, applyAssistantSelection, handleInputChange]);
 
   const handleCopy = React.useCallback((idx) => {
     const node = document.getElementById(`canvas_${idx}`);
@@ -1801,6 +1805,154 @@ export default function workSpaceLayout() {
   );
 
   const selectedChatId = activeThreadId;
+  const [searchedMessages, setSearchedMessages] = useState('');
+  const [searchedText, setSearchedText] = useState('');
+  const [newStreamingList, setNewStreamingList] = useState([]);
+  const hasResultRef = useRef(false);
+  const streamedListRef = useRef([]);
+  const [chatIsLoading, setChatIsLoading] = useState(false);
+  const [isStreamNewChat, setIsStreamNewChat] = useState(true);
+
+  useEffect(() => {
+    if (!threadChatId || searchedText.length === 0) return;
+    setInput('');
+    streamedListRef.current.push({
+      id: `user-${Date.now()}`,
+      role: "user",
+      content: searchedText
+    });
+    setChatIsLoading(true);
+    getStreamMessages({
+      url: `/threads/${threadChatId}/runs/stream`,
+      body: {
+        "input": {
+          "messages": [
+            {
+              "role": "user",
+              "content": searchedText
+            }
+          ]
+        },
+        "config": {
+          "recursion_limit": 100
+        },
+        "stream_mode": [
+          "messages",
+          "modules",
+          "metadata",
+          "custom",
+          "updates",
+          "messages-tuple",
+          "values"
+        ],
+        "stream_subgraphs": true,
+        "stream_resumable": true,
+        "assistant_id": "agent",
+        "on_disconnect": "cancel"
+      },
+
+      onChunk: (event, data) => {
+        console.log(event, data);
+        if (event !== "messages") return;
+        setChatIsLoading(true);
+        // Detect result marker
+        if (
+          data.some(msg => msg.thread_id && msg.langgraph_node === "result")
+        ) {
+          hasResultRef.current = true;
+        }
+
+        // Collect AI chunks after result
+        if (hasResultRef.current) {
+          const aiChunks = data.filter(
+            msg => msg.type === "AIMessageChunk"
+          );
+
+          if (aiChunks.length) {
+            aiChunks.forEach(msg => {
+              const existingIndex = streamedListRef.current.findIndex(
+                m => m.id === msg.id
+              );
+
+              if (existingIndex !== -1) {
+                // 🔁 SAME ID → append content
+                streamedListRef.current[existingIndex].content += msg.content;
+              } else {
+                // 🆕 FIRST chunk → create message
+                streamedListRef.current.push({
+                  id: msg.id,
+                  role: "assistant",
+                  content: msg.content
+                });
+              }
+            });
+
+            // 🔄 trigger UI update
+            setNewStreamingList([...streamedListRef.current]);
+          }
+        }
+
+      },
+      onDone: () => {
+        setSearchedText('');
+        setSearchedMessages([]);
+        setChatIsLoading(false);
+        hasResultRef.current = false;
+      },
+      onError: console.error,
+    });
+  }, [threadChatId, searchedText])
+
+  useEffect(() => {
+    if (threadChatId) {
+      setIsStreamNewChat(false);
+      setSearchedText('');
+      // threadHistory(threadChatId);
+    }
+  }, [threadChatId])
+  
+
+  useEffect(() => {
+    if (!initialMessage) return;
+    setSearchedText(initialMessage);
+    setSearchedMessages((prev) => [
+      ...prev,
+      {
+        id: "temp-user-msg",
+        role: "user",
+        content: initialMessage,
+      },
+    ]);
+  }, [initialMessage]);
+
+  const openNewChat = () => {
+    setIsStreamNewChat(true);
+    streamedListRef.current = [];
+    setNewStreamingList([]);
+    setChatIsLoading(false);
+    setSearchedText('');
+  }
+
+
+
+  useEffect(() => {
+    if (!searchedText || threadChatId) return;
+    createThread({ url: '/threads', body: { input, assistantId } }).then((response) => {
+      if (response && response.thread_id) {
+        navigate(`/chat/${response.thread_id}`, {
+          state: {
+            initialMessage: input,
+          },
+          replace: true,
+        });
+      }
+    });
+  }, [searchedText, threadChatId])
+
+  const handleSubmit = () => {
+    if (!input) return;
+    setSearchedText(input);
+  }
 
   return (
     <div className={containerClassName}>
@@ -1815,7 +1967,7 @@ export default function workSpaceLayout() {
               isLoading={isLoading}
               navigate={navigate}
               onOpenThread={handleThreadId}
-              onStartNewChat={startNewChat}
+              onStartNewChat={openNewChat}
               onToggleTheme={toggleTheme}
               onToggleCollapse={toggleLeftCollapse}
               refreshKey={refreshKey}
@@ -1825,17 +1977,19 @@ export default function workSpaceLayout() {
 
           <ChatSection
             theme={theme}
+            newStreamingList={newStreamingList}
             chatBodyRef={chatBodyRef}
             updatedevents={updatedevents}
             input={input}
-            isLoading={isLoading}
+            isLoading={chatIsLoading}
             messages={normalizedMessages}
+            isStreamNewChat={isStreamNewChat}
             sandboxUrl={overrideSandboxUrl ?? sandboxUrl}
             onCopy={handleCopy}
             onDownload={handleDownload}
             onInputChange={handleInputChange}
-            onSend={handleSend}
             onStop={handleStop}
+            handleSubmit={handleSubmit}
             onTimelineStepsChange={setTimelineSteps}
             stage={stage}
             stageProgress={stageProgress ?? 0}
@@ -1862,4 +2016,5 @@ export default function workSpaceLayout() {
       </div>
     </div>
   );
+
 }

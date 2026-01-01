@@ -69,3 +69,112 @@ export async function fetchThreadById(threadId) {
     return null;
   }
 }
+
+export async function getStreamMessages({
+  url,
+  body,
+  onChunk,
+  onDone,
+  onError,
+  signal
+}) {
+  const res = await fetch(API_BASE_URL + url, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Accept: "text/event-stream",
+    },
+    body: JSON.stringify(body),
+    signal,
+  });
+
+  if (!res.body) {
+    throw new Error("ReadableStream not supported");
+  }
+
+  const reader = res.body.getReader();
+  const decoder = new TextDecoder("utf-8");
+
+  let buffer = "";
+
+  try {
+    while (true) {
+      const { value, done } = await reader.read();
+      if (done) break;
+
+      buffer += decoder.decode(value, { stream: true });
+
+      buffer = parseSSE(buffer, (event, data) => {
+        onChunk?.(event, data);
+      });
+    }
+
+    onDone?.();
+  } catch (err) {
+    if (err.name !== "AbortError") {
+      onError?.(err);
+    }
+  }
+}
+
+function parseSSE(buffer, onEvent) {
+  const events = buffer.split("\n\n");
+  const incomplete = events.pop();
+
+  for (const event of events) {
+    let eventName = "message";
+    let data = "";
+
+    for (const line of event.split("\n")) {
+      if (line.startsWith("event:")) {
+        eventName = line.replace("event:", "").trim();
+      }
+      if (line.startsWith("data:")) {
+        data += line.replace("data:", "").trim();
+      }
+    }
+
+    if (data) {
+      try {
+        onEvent(eventName, JSON.parse(data));
+      } catch {
+        // partial chunk → wait for next buffer
+      }
+    }
+  }
+
+  return incomplete;
+}
+
+export async function createThread({ title, assistantId }) {
+  const response = await fetch(`${normalizeBaseUrl(API_BASE_URL)}/threads`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      "metadata": {
+        thread_name: title || "New Thread",
+        assistant_id: resolveAssistantId(assistantId),
+      }
+    }),
+  });
+  if (!response.ok) {
+    throw new Error(`Failed to create thread: ${response.status} ${response.statusText}`);
+  }
+  const thread = await response.json();
+  return thread;
+}
+
+export async function threadHistory(threadId) {
+  if (!threadId) {
+    return [];
+  }
+
+  const response = await fetch(`${normalizeBaseUrl(API_BASE_URL)}/threads/${threadId}/history`);
+  if (!response.ok) {
+    throw new Error(`Failed to fetch thread history: ${response.status} ${response.statusText}`);
+  }
+  const history = await response.json();
+  return history;
+}
