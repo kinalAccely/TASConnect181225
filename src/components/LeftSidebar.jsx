@@ -126,7 +126,7 @@ export default function LeftSidebar({
     if (!targetId) {
       return;
     }
-    navigate(`/chat/${targetId}`, { state: { assistant_id: item.metadata.graph_id , loadHistory : true} });
+    navigate(`/chat/${targetId}`, { state: { assistant_id: item.metadata.graph_id , loadHistory : `load_${Date.now()}`} });
     setCurrentId(targetId);
   };
 

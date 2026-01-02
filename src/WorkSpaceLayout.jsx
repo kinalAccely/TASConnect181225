@@ -1812,14 +1812,14 @@ export default function workSpaceLayout() {
   const streamedListRef = useRef([]);
   const [chatIsLoading, setChatIsLoading] = useState(false);
   const [isStreamNewChat, setIsStreamNewChat] = useState(true);
-  const [loadHistoryToggle, setLoadHistoryToggle] = useState("initial");
+  const [loadHistoryToggle, setLoadHistoryToggle] = useState("load");
   const initialMessage = location.state?.initialMessage;
   const state_assistant_id = location.state?.assistant_id || location.state?.assistantId || 'agent';
   const loadHistory = location.state?.loadHistory || location.state?.loadHistory || '';
-  const [streamSandboxUrl , setStreamSandboxUrl] = useState('');
-  useEffect(()=>{
-    setLoadHistoryToggle("initial");
-  } , [loadHistory])
+  const [streamSandboxUrl, setStreamSandboxUrl] = useState('');
+  useEffect(() => {
+    setLoadHistoryToggle(`load_${Date.now()}`);
+  }, [loadHistory])
 
   useEffect(() => {
     if (state_assistant_id) {
@@ -1869,39 +1869,52 @@ export default function workSpaceLayout() {
         options: { on_disconnect: "cancel" },
 
         onChunk: (event, data) => {
-          if (event !== "messages") return;
+          if (!["messages", "updates"].includes(event)) return;
 
-          if (
-            data.some(msg =>
-              msg.thread_id &&
-              (
-                MODULE_STREAM_RULES[assistantId].acceptEvents?.length === 0 ||
-                (MODULE_STREAM_RULES[assistantId].acceptEvents && MODULE_STREAM_RULES[assistantId].acceptEvents?.includes(msg.langgraph_node))
+          if (event === 'messages') {
+            if (
+              data.some(msg =>
+                msg.thread_id &&
+                (
+                  MODULE_STREAM_RULES[assistantId].acceptEvents?.length === 0 ||
+                  (MODULE_STREAM_RULES[assistantId].acceptEvents && MODULE_STREAM_RULES[assistantId].acceptEvents?.includes(msg.langgraph_node))
+                )
               )
-            )
-          ) {
-            hasResultRef.current = true;
+            ) {
+              hasResultRef.current = true;
+            }
+
+            if (!hasResultRef.current) return;
+
+            data
+              .filter(msg => msg.type === "AIMessageChunk")
+              .forEach(msg => {
+                const idx = streamedListRef.current.findIndex(m => m.id === msg.id);
+                if (idx !== -1) {
+                  streamedListRef.current[idx].content += msg.content;
+                } else {
+                  streamedListRef.current.push({
+                    id: msg.id,
+                    role: "assistant",
+                    content: msg.content
+                  });
+                }
+              });
+
+            setNewStreamingList([...streamedListRef.current]);
           }
 
-          if (!hasResultRef.current) return;
+          else{
+            console.log(data);
+            if(data?.invoke_init?.sandbox_url){
+              setStreamSandboxUrl(data.invoke_init.sandbox_url);
+            }
+          }
 
-          data
-            .filter(msg => msg.type === "AIMessageChunk")
-            .forEach(msg => {
-              const idx = streamedListRef.current.findIndex(m => m.id === msg.id);
-              if (idx !== -1) {
-                streamedListRef.current[idx].content += msg.content;
-              } else {
-                streamedListRef.current.push({
-                  id: msg.id,
-                  role: "assistant",
-                  content: msg.content
-                });
-              }
-            });
+          // if(isStreamNewChat){
+          //   streamedListRef.current = [];
 
-          // ✅ reflect ref → UI
-          setNewStreamingList([...streamedListRef.current]);
+          // }
         },
 
         onDone: () => {
@@ -1953,39 +1966,40 @@ export default function workSpaceLayout() {
   useEffect(() => {
     if (!threadChatId) return;
     let cancelled = false;
-    if(["initial" , "load"].includes(loadHistoryToggle)){
+    // if (loadHistoryToggle.includes("load")) {
       threadHistory(threadChatId).then((response) => {
         if (cancelled) return;
-  
+
         const historyMessages = Array.isArray(response) ? response : [];
-  
+
         const filteredMessages = [];
-  
+
         const msg_values = historyMessages[0]?.values?.messages;
+        setStreamSandboxUrl(historyMessages[0]?.values?.sandbox_url)
         for (let i = 0; i < msg_values?.length; i++) {
-  
+
           const msg = msg_values[i];
-  
+
           if (!msg) continue;
           if (msg.type !== "human" && msg.type !== "ai") continue;
           if (typeof msg.content !== "string") continue;
-  
+
           filteredMessages.push({
             id: msg.id,
             role: msg.type === "human" ? "user" : "assistant",
             content: msg.content
           });
         }
-  
+
         streamedListRef.current = filteredMessages;
         console.log("Fetched thread history messages:", filteredMessages);
         setNewStreamingList(filteredMessages);
       });
-  
+
       return () => {
         cancelled = true;
       };
-    }
+    // }
   }, [loadHistoryToggle]);
 
 
@@ -1997,17 +2011,18 @@ export default function workSpaceLayout() {
     setLoadHistoryToggle("");
     setSearchedText('');
     setAssistantId('agent');
+    setStreamSandboxUrl('');
   }
 
 
 
   useEffect(() => {
     if (!searchedText || threadChatId) return;
-    createThread({ url: '/threads', body: { input, assistantId } }).then((response) => {
+    createThread({ url: '/threads', body: { searchedText, assistantId } }).then((response) => {
       if (response && response.thread_id) {
         navigate(`/chat/${response.thread_id}`, {
           state: {
-            initialMessage: input,
+            initialMessage: searchedText,
             assistant_id: assistantId
           },
           replace: true,
@@ -2062,6 +2077,7 @@ export default function workSpaceLayout() {
             isTransitioning={isThreadTransitioning}
             assistantSuggestions={assistantSuggestions}
             currentAssistantId={assistantId}
+            activeModule = {assistantId}
             onAssistantSuggestionSelect={handleAssistantSuggestionSelect}
             shouldShowAssistantSuggestions={shouldShowAssistantSuggestions}
             threadId={activeThreadId}

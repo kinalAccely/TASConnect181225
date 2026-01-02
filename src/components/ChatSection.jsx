@@ -51,12 +51,12 @@ export default function ChatSection({
     const trimmed = url.trim();
     try {
       const hasProto = /^https?:\/\//i.test(trimmed);
-      const u = new URL(hasProto ? trimmed : `http://${trimmed}/vnc/index.html?autoconnect=true&resize=scale&reconnector=1&path=websockify`);
-      if (u.hostname === "localhost" && SANDBOX_HOST) {
-        u.hostname = SANDBOX_HOST;
-        u.protocol = "http:";
-      }
-      return u.toString();
+      const u = `${trimmed}/vnc/index.html?autoconnect=true&resize=scale&reconnector=1&path=websockify`;
+      // if (u.hostname === "localhost") {
+      //   u.hostname = SANDBOX_HOST;
+      //   u.protocol = "http:";
+      // }
+      return u;
     } catch {
       return trimmed;
     }
@@ -69,49 +69,173 @@ export default function ChatSection({
   ];
 
   const handleDownload = useCallback((content) => {
-    if (!content) return;
+  if (!content) return;
 
-    // 1. Process Markdown to HTML for Word compatibility
-    let formattedContent = content
-      // Bold: **text** -> <b>text</b>
-      .replace(/\*\*(.*?)\*\*/g, '<b>$1</b>')
-      // Bullet points: - item -> <li>item</li>
-      .replace(/^\s*-\s+(.*)$/gm, '<li>$1</li>')
-      // Ensure list items are wrapped in <ul>
-      .replace(/(<li>.*<\/li>)/s, '<ul>$1</ul>')
-      // New lines to breaks
-      .replace(/\n/g, '<br/>');
+  let formattedContent = content
 
-    // 2. CSS to match your frontend (Inter/Segoe UI and slate colors)
-    const cssStyles = `
-      <style>
-        body { font-family: 'Segoe UI', Arial, sans-serif; color: #334155; line-height: 1.6; padding: 40px; }
-        b { color: #0f172a; }
-        ul { margin-bottom: 15px; }
-        li { margin-bottom: 5px; }
-      </style>
-    `;
+    /* ---------- HEADINGS ---------- */
+    .replace(/^### (.*)$/gm, '<h3>$1</h3>')
+    .replace(/^## (.*)$/gm, '<h2>$1</h2>')
+    .replace(/^# (.*)$/gm, '<h1>$1</h1>')
 
-    // 3. Construct Word-specific HTML Wrapper
-    const htmlContent = `
-      <html xmlns:o='urn:schemas-microsoft-com:office:office' xmlns:w='urn:schemas-microsoft-com:office:word' xmlns='http://www.w3.org/TR/REC-html40'>
-        <head><meta charset="utf-8">${cssStyles}</head>
-        <body>
-          ${formattedContent}
-        </body>
-      </html>
-    `;
+    /* ---------- HORIZONTAL RULE ---------- */
+    .replace(/^\s*---\s*$/gm, '<hr />')
 
-    const blob = new Blob([htmlContent], { type: "application/msword" });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement("a");
-    link.href = url;
-    link.download = `workspace_export_${Date.now()}.doc`;
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-    URL.revokeObjectURL(url);
-  }, []);
+    /* ---------- BOLD ---------- */
+    .replace(/\*\*(.*?)\*\*/g, '<b>$1</b>')
+
+    /* ---------- TABLES (GFM) ---------- */
+    // Convert table header row
+    .replace(
+      /^\|(.+)\|\n\|([-\s|:]+)\|\n((?:\|.*\|\n?)*)/gm,
+      (_, header, _sep, body) => {
+        const headers = header
+          .split('|')
+          .map(h => `<th>${h.trim()}</th>`)
+          .join('');
+
+        const rows = body
+          .trim()
+          .split('\n')
+          .map(row => {
+            const cells = row
+              .replace(/^\||\|$/g, '')
+              .split('|')
+              .map(c => `<td>${c.trim()}</td>`)
+              .join('');
+            return `<tr>${cells}</tr>`;
+          })
+          .join('');
+
+        return `
+          <table>
+            <thead><tr>${headers}</tr></thead>
+            <tbody>${rows}</tbody>
+          </table>
+        `;
+      }
+    )
+
+    /* ---------- BULLET LISTS ---------- */
+    .replace(/^\s*[-•]\s+(.*)$/gm, '<li>$1</li>')
+    .replace(/(<li>.*<\/li>)/gs, '<ul>$1</ul>')
+
+    /* ---------- PARAGRAPHS ---------- */
+    .replace(/\n{2,}/g, '</p><p>')
+    .replace(/\n/g, ' ');
+
+  formattedContent = `<p>${formattedContent}</p>`;
+
+  /* ---------- WORD-FRIENDLY CSS ---------- */
+  const cssStyles = `
+    <style>
+      body {
+        font-family: 'Segoe UI', Arial, sans-serif;
+        color: #334155;
+        line-height: 1.6;
+        padding: 40px;
+      }
+
+      h1 {
+        font-size: 22px;
+        font-weight: 700;
+        margin: 24px 0 12px;
+        color: #0f172a;
+      }
+
+      h2 {
+        font-size: 18px;
+        font-weight: 600;
+        margin: 20px 0 10px;
+        border-bottom: 1px solid #e5e7eb;
+        padding-bottom: 4px;
+        color: #0f172a;
+      }
+
+      h3 {
+        font-size: 16px;
+        font-weight: 600;
+        margin: 16px 0 8px;
+        color: #1f2937;
+      }
+
+      p {
+        margin-bottom: 12px;
+      }
+
+      hr {
+        border: none;
+        border-top: 1px solid #e5e7eb;
+        margin: 24px 0;
+      }
+
+      ul {
+        margin: 8px 0 12px 20px;
+        padding-left: 16px;
+      }
+
+      li {
+        margin-bottom: 6px;
+      }
+
+      table {
+        width: 100%;
+        border-collapse: collapse;
+        margin: 16px 0;
+        font-size: 13px;
+      }
+
+      th, td {
+        border: 1px solid #e5e7eb;
+        padding: 8px;
+        text-align: left;
+        vertical-align: top;
+      }
+
+      th {
+        background: #f1f5f9;
+        font-weight: 600;
+        color: #0f172a;
+      }
+
+      b {
+        font-weight: 600;
+        color: #0f172a;
+      }
+    </style>
+  `;
+
+  /* ---------- WORD HTML WRAPPER ---------- */
+  const htmlContent = `
+    <html xmlns:o="urn:schemas-microsoft-com:office:office"
+          xmlns:w="urn:schemas-microsoft-com:office:word"
+          xmlns="http://www.w3.org/TR/REC-html40">
+      <head>
+        <meta charset="utf-8" />
+        ${cssStyles}
+      </head>
+      <body>
+        ${formattedContent}
+      </body>
+    </html>
+  `;
+
+  const blob = new Blob([htmlContent], {
+    type: "application/msword",
+  });
+
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = `workspace_export_${Date.now()}.doc`;
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+  URL.revokeObjectURL(url);
+}, []);
+
+
+
 
   useEffect(() => {
     if (currentAssistantId) {
@@ -200,14 +324,70 @@ export default function ChatSection({
     chatContainer.addEventListener('scroll', handleScroll);
     return () => chatContainer.removeEventListener('scroll', handleScroll);
   }, [chatBodyRef]);
-
   const markdownComponents = {
-    p: ({ node, ...props }) => <p className="mb-3 last:mb-0 leading-relaxed" {...props} />,
-    ul: ({ node, ...props }) => <ul className="mb-3 ml-5 list-disc space-y-1" {...props} />,
-    ol: ({ node, ...props }) => <ol className="mb-3 ml-5 list-decimal space-y-1" {...props} />,
-    li: ({ node, ...props }) => <li className="pl-1" {...props} />,
-    strong: ({ node, ...props }) => <strong className="font-bold text-zinc-900" {...props} />,
-  };
+  /* ---------- HEADINGS ---------- */
+  h1: ({ node, ...props }) => (
+    <h1 className="text-2xl font-bold mb-4 mt-6 text-zinc-900" {...props} />
+  ),
+  h2: ({ node, ...props }) => (
+    <h2 className="text-xl font-semibold mb-3 mt-5 text-zinc-900 border-b pb-1" {...props} />
+  ),
+  h3: ({ node, ...props }) => (
+    <h3 className="text-lg font-semibold mb-2 mt-4 text-zinc-800" {...props} />
+  ),
+
+  /* ---------- TEXT ---------- */
+  p: ({ node, ...props }) => (
+    <p className="mb-3 last:mb-0 leading-relaxed text-zinc-700" {...props} />
+  ),
+  strong: ({ node, ...props }) => (
+    <strong className="font-semibold text-zinc-900" {...props} />
+  ),
+
+  /* ---------- LISTS ---------- */
+  ul: ({ node, ...props }) => (
+    <ul className="mb-3 ml-5 list-disc space-y-1" {...props} />
+  ),
+  ol: ({ node, ...props }) => (
+    <ol className="mb-3 ml-5 list-decimal space-y-1" {...props} />
+  ),
+  li: ({ node, ...props }) => (
+    <li className="pl-1 text-zinc-700" {...props} />
+  ),
+
+  /* ---------- TABLES (FIX) ---------- */
+  table: ({ node, ...props }) => (
+    <div className="overflow-x-auto my-4">
+      <table
+        className="min-w-full border border-zinc-200 rounded-lg border-collapse text-sm"
+        {...props}
+      />
+    </div>
+  ),
+  thead: ({ node, ...props }) => (
+    <thead className="bg-zinc-100" {...props} />
+  ),
+  tbody: ({ node, ...props }) => (
+    <tbody className="divide-y divide-zinc-200" {...props} />
+  ),
+  tr: ({ node, ...props }) => (
+    <tr className="hover:bg-zinc-50" {...props} />
+  ),
+  th: ({ node, ...props }) => (
+    <th
+      className="border border-zinc-200 px-3 py-2 text-left font-semibold text-zinc-900"
+      {...props}
+    />
+  ),
+  td: ({ node, ...props }) => (
+    <td
+      className="border border-zinc-200 px-3 py-2 text-zinc-700 align-top"
+      {...props}
+    />
+  ),
+};
+
+
 
   const normalizedSandbox =
     sandboxUrl ? normalizeSandboxUrl(sandboxUrl) : null;
@@ -285,6 +465,7 @@ export default function ChatSection({
               </button>
             );
 
+
             /* ================= USER MESSAGE ================= */
             if (isUser) {
               return (
@@ -307,7 +488,6 @@ export default function ChatSection({
             }
 
             /* ================= ASSISTANT ================= */
-            if (isLiveDemo) return null;
 
             return (
               <div key={msgId} className="flex flex-col gap-4">
@@ -337,7 +517,7 @@ export default function ChatSection({
                           </button>
 
                           <button
-                            onClick={() => handleDownload(msg.text)}
+                            onClick={() => handleDownload(msg.content)}
                             className="text-[11px] font-medium text-zinc-500 hover:text-[var(--brand)]
                     flex items-center gap-1"
                           >
