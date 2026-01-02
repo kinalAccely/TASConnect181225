@@ -2015,11 +2015,12 @@ export default function workSpaceLayout() {
   }
 
 
-
+const [reloadThread , setReloadThread] = useState('')
   useEffect(() => {
     if (!searchedText || threadChatId) return;
     createThread(searchedText, assistantId).then((response) => {
       if (response && response.thread_id) {
+        setReloadThread(`reload_${Date.now()}`);
         navigate(`/chat/${response.thread_id}`, {
           state: {
             initialMessage: searchedText,
@@ -2052,6 +2053,7 @@ export default function workSpaceLayout() {
               onToggleTheme={toggleTheme}
               onToggleCollapse={toggleLeftCollapse}
               refreshKey={refreshKey}
+              refreshThread = {reloadThread}
               selectedChatId={selectedChatId}
             />
           </div>

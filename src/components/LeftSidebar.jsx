@@ -32,6 +32,7 @@ const resolveThreadLabel = (thread) => {
 export default function LeftSidebar({
   isCollapsed,
   isLoading,
+  refreshThread,
   theme = "light",
   onStartNewChat,
   onToggleTheme,
@@ -72,7 +73,7 @@ export default function LeftSidebar({
     return () => {
       isMounted = false;
     };
-  }, [refreshKey]);
+  }, [refreshThread]);
 
   const hasThreads = threads.length > 0;
   const isDarkTheme = theme === "dark";
