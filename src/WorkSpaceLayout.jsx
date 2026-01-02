@@ -514,7 +514,6 @@ export default function workSpaceLayout() {
   });
   const location = useLocation();
   const navigate = useNavigate();
-  const initialMessage = location.state?.initialMessage;
   const [timelineSteps, setTimelineSteps] = React.useState(DEFAULT_TIMELINE_STEPS);
   const [streamError, setStreamError] = React.useState(null);
   const seenToolIdsRef = React.useRef(new Set());
@@ -605,71 +604,71 @@ export default function workSpaceLayout() {
 
   const assistantSuggestions = React.useMemo(() => ASSISTANT_SUGGESTIONS, []);
 
-  React.useEffect(() => {
-    const normalizedChatId = chatId ?? null;
-    if (previousChatIdRef.current !== normalizedChatId) {
-      previousChatIdRef.current = normalizedChatId;
-      if (normalizedChatId) {
-        setShowAssistantChooser(false);
-      }
-    }
-  }, [chatId]);
+  // React.useEffect(() => {
+  //   const normalizedChatId = chatId ?? null;
+  //   if (previousChatIdRef.current !== normalizedChatId) {
+  //     previousChatIdRef.current = normalizedChatId;
+  //     if (normalizedChatId) {
+  //       setShowAssistantChooser(false);
+  //     }
+  //   }
+  // }, [chatId]);
 
-  React.useEffect(() => {
-    if (!chatId) {
-      lastThreadAssistantRef.current = { threadId: null, assistantId: null };
-      return;
-    }
+  // React.useEffect(() => {
+  //   if (!chatId) {
+  //     lastThreadAssistantRef.current = { threadId: null, assistantId: null };
+  //     return;
+  //   }
 
-    const normalizedChatId = String(chatId);
+  //   const normalizedChatId = String(chatId);
 
-    if (lastThreadAssistantRef.current.threadId === normalizedChatId) {
-      const storedAssistantId = lastThreadAssistantRef.current.assistantId;
-      if (storedAssistantId && storedAssistantId !== assistantId) {
-        setAssistantId(storedAssistantId);
-      }
-      if (showAssistantChooser) {
-        setShowAssistantChooser(false);
-      }
-      return;
-    }
+  //   if (lastThreadAssistantRef.current.threadId === normalizedChatId) {
+  //     const storedAssistantId = lastThreadAssistantRef.current.assistantId;
+  //     if (storedAssistantId && storedAssistantId !== assistantId) {
+  //       setAssistantId(storedAssistantId);
+  //     }
+  //     if (showAssistantChooser) {
+  //       setShowAssistantChooser(false);
+  //     }
+  //     return;
+  //   }
 
-    let isActive = true;
+  //   let isActive = true;
 
-    const loadThreadAssistant = async () => {
-      try {
-        const thread = await fetchThreadById(normalizedChatId);
-        if (!isActive) {
-          return;
-        }
-        const threadAssistantId = extractAssistantIdFromThread(thread);
-        lastThreadAssistantRef.current = {
-          threadId: normalizedChatId,
-          assistantId: threadAssistantId ?? null,
-        };
-        if (threadAssistantId && threadAssistantId !== assistantId) {
-          setAssistantId(threadAssistantId);
-        }
-        if (threadAssistantId && showAssistantChooser) {
-          setShowAssistantChooser(false);
-        }
-      } catch (error) {
-        console.warn("Unable to resolve assistant for thread:", error);
-        if (isActive) {
-          lastThreadAssistantRef.current = {
-            threadId: normalizedChatId,
-            assistantId: null,
-          };
-        }
-      }
-    };
+  //   const loadThreadAssistant = async () => {
+  //     try {
+  //       const thread = await fetchThreadById(normalizedChatId);
+  //       if (!isActive) {
+  //         return;
+  //       }
+  //       const threadAssistantId = extractAssistantIdFromThread(thread);
+  //       lastThreadAssistantRef.current = {
+  //         threadId: normalizedChatId,
+  //         assistantId: threadAssistantId ?? null,
+  //       };
+  //       if (threadAssistantId && threadAssistantId !== assistantId) {
+  //         setAssistantId(threadAssistantId);
+  //       }
+  //       if (threadAssistantId && showAssistantChooser) {
+  //         setShowAssistantChooser(false);
+  //       }
+  //     } catch (error) {
+  //       console.warn("Unable to resolve assistant for thread:", error);
+  //       if (isActive) {
+  //         lastThreadAssistantRef.current = {
+  //           threadId: normalizedChatId,
+  //           assistantId: null,
+  //         };
+  //       }
+  //     }
+  //   };
 
-    loadThreadAssistant();
+  //   loadThreadAssistant();
 
-    return () => {
-      isActive = false;
-    };
-  }, [chatId, assistantId, showAssistantChooser]);
+  //   return () => {
+  //     isActive = false;
+  //   };
+  // }, [chatId, assistantId, showAssistantChooser]);
 
   React.useEffect(() => {
     if (activeThreadId) {
@@ -712,19 +711,19 @@ export default function workSpaceLayout() {
     setActiveThreadId(normalizedId);
   }, [chatId, triggerThreadTransition]);
 
-  const handleThreadId = React.useCallback(
-    (threadId) => {
-      if (threadId !== activeThreadId) {
-        triggerThreadTransition();
-      }
-      setActiveThreadId(threadId);
-      setRefreshKey((prev) => prev + 1);
-      if (typeof navigate === "function" && threadId) {
-        navigate(`/chat/${threadId}`);
-      }
-    },
-    [navigate, activeThreadId, triggerThreadTransition],
-  );
+  // const handleThreadId = React.useCallback(
+  //   (threadId) => {
+  //     if (threadId !== activeThreadId) {
+  //       triggerThreadTransition();
+  //     }
+  //     setActiveThreadId(threadId);
+  //     setRefreshKey((prev) => prev + 1);
+  //     if (typeof navigate === "function" && threadId) {
+  //       navigate(`/chat/${threadId}`);
+  //     }
+  //   },
+  //   [navigate, activeThreadId, triggerThreadTransition],
+  // );
 
   const upsertEntries = React.useCallback((setter) => {
     return (payload) => {
@@ -873,8 +872,8 @@ export default function workSpaceLayout() {
     apiUrl: API_BASE_URL || undefined,
     threadId: activeThreadId,
     streamMode: UNIFIED_STREAM_MODES,
-    onThreadId: handleThreadId,
-    fetchStateHistory: true,
+    // onThreadId: handleThreadId,
+    // fetchStateHistory: true,
     reconnectOnMount: false,
     onCreated: (runMeta) => {
       setNewChat(false);
@@ -1262,18 +1261,18 @@ export default function workSpaceLayout() {
   //   // ];
   // }, [stableBaseMessages, streamValues]);
 
-  const normalizedMessages = React.useMemo(
-    () =>
-      mapMessagesForDisplay(
-        streamMessages,
-        isLoading,
-        custom,
-        updatedevents,
-        assistantId,
-        customMsg
-      ),
-    [streamLength, streamLastKey, assistantId] // ✅
-  );
+  // const normalizedMessages = React.useMemo(
+  //   () =>
+  //     mapMessagesForDisplay(
+  //       streamMessages,
+  //       isLoading,
+  //       custom,
+  //       updatedevents,
+  //       assistantId,
+  //       customMsg
+  //     ),
+  //   [streamLength, streamLastKey, assistantId] // ✅
+  // );
   // if (pendingMessages.length === 0) {
   //   return stableBaseMessages;
   // }
@@ -1373,47 +1372,47 @@ export default function workSpaceLayout() {
     [activeThreadId],
   );
 
-  React.useEffect(() => {
-    requestAnimationFrame(() => {
-      if (chatBodyRef.current && !isNewChat) {
-        chatBodyRef.current.scrollTop = chatBodyRef.current.scrollHeight;
-      }
-    });
-  }, [normalizedMessages]);
+  // React.useEffect(() => {
+  //   requestAnimationFrame(() => {
+  //     if (chatBodyRef.current && !isNewChat) {
+  //       chatBodyRef.current.scrollTop = chatBodyRef.current.scrollHeight;
+  //     }
+  //   });
+  // }, [normalizedMessages]);
 
-  const [isNewChat, setNewChat] = React.useState(false);
-  const startNewChat = React.useCallback(() => {
-    setNewChat(true);
-    if (isLoading && typeof stop === "function") {
-      stop().catch((stopError) => {
-        console.warn("Unable to stop active stream before reset:", stopError);
-      });
-    }
-    triggerThreadTransition();
-    setActiveThreadId(null);
-    setUpdatedEvents([]);
-    setAssistantId('agent');
-    handleInputChange("");
-    setSources([]);
-    setChatId('');
-    setSearchedMessages([]);
-    setIsRightCollapsed(true);
-    setRefreshKey((prev) => prev + 1);
-    resetToolTracking();
-    setStreamError(null);
-    setShowAssistantChooser(false);
-    lastThreadAssistantRef.current = { threadId: null, assistantId: DEFAULT_ASSISTANT_ID };
-    if (typeof navigate === "function") {
-      navigate("/chat");
-    }
-  }, [
-    isLoading,
-    stop,
-    resetToolTracking,
-    navigate,
-    triggerThreadTransition,
-    handleInputChange,
-  ]);
+  // const [isNewChat, setNewChat] = React.useState(false);
+  // const startNewChat = React.useCallback(() => {
+  //   setNewChat(true);
+  //   if (isLoading && typeof stop === "function") {
+  //     stop().catch((stopError) => {
+  //       console.warn("Unable to stop active stream before reset:", stopError);
+  //     });
+  //   }
+  //   triggerThreadTransition();
+  //   setActiveThreadId(null);
+  //   setUpdatedEvents([]);
+  //   setAssistantId('agent');
+  //   handleInputChange("");
+  //   setSources([]);
+  //   setChatId('');
+  //   setSearchedMessages([]);
+  //   setIsRightCollapsed(true);
+  //   setRefreshKey((prev) => prev + 1);
+  //   resetToolTracking();
+  //   setStreamError(null);
+  //   setShowAssistantChooser(false);
+  //   lastThreadAssistantRef.current = { threadId: null, assistantId: DEFAULT_ASSISTANT_ID };
+  //   if (typeof navigate === "function") {
+  //     navigate("/chat");
+  //   }
+  // }, [
+  //   isLoading,
+  //   stop,
+  //   resetToolTracking,
+  //   navigate,
+  //   triggerThreadTransition,
+  //   handleInputChange,
+  // ]);
 
   React.useEffect(() => {
     if (
@@ -1450,11 +1449,11 @@ export default function workSpaceLayout() {
     setToolScanVersion((prev) => prev + 1);
   }, [activeThreadId]);
 
-  React.useEffect(() => {
-    if (isThreadTransitioning && normalizedMessages.length > 0) {
-      setIsThreadTransitioning(false);
-    }
-  }, [isThreadTransitioning, normalizedMessages.length]);
+  // React.useEffect(() => {
+  //   if (isThreadTransitioning && normalizedMessages.length > 0) {
+  //     setIsThreadTransitioning(false);
+  //   }
+  // }, [isThreadTransitioning, normalizedMessages.length]);
 
   React.useEffect(() => () => {
     if (transitionTimeoutRef.current) {
@@ -1804,6 +1803,7 @@ export default function workSpaceLayout() {
     [],
   );
 
+  ///// Chat Search and Thread Creation Logic //////
   const selectedChatId = activeThreadId;
   const [searchedMessages, setSearchedMessages] = useState('');
   const [searchedText, setSearchedText] = useState('');
@@ -1812,73 +1812,86 @@ export default function workSpaceLayout() {
   const streamedListRef = useRef([]);
   const [chatIsLoading, setChatIsLoading] = useState(false);
   const [isStreamNewChat, setIsStreamNewChat] = useState(true);
+  const [loadHistoryToggle, setLoadHistoryToggle] = useState("initial");
+  const initialMessage = location.state?.initialMessage;
+  const state_assistant_id = location.state?.assistant_id || location.state?.assistantId || 'agent';
+  const loadHistory = location.state?.loadHistory || location.state?.loadHistory || '';
+  const [streamSandboxUrl , setStreamSandboxUrl] = useState('');
+  useEffect(()=>{
+    setLoadHistoryToggle("initial");
+  } , [loadHistory])
+
+  useEffect(() => {
+    if (state_assistant_id) {
+      setAssistantId(state_assistant_id);
+    }
+  }, [state_assistant_id]);
+
 
   useEffect(() => {
     if (!threadChatId || searchedText.length === 0) return;
+
     setInput('');
+    setLoadHistoryToggle("");
+
     streamedListRef.current.push({
       id: `user-${Date.now()}`,
       role: "user",
       content: searchedText
     });
+
+    // ✅ Always update UI snapshot
+    setNewStreamingList([...streamedListRef.current]);
+
     setChatIsLoading(true);
-    getStreamMessages({
-      url: `/threads/${threadChatId}/runs/stream`,
-      body: {
-        "input": {
-          "messages": [
-            {
-              "role": "user",
-              "content": searchedText
-            }
-          ]
+
+    setTimeout(() => {
+      getStreamMessages({
+        url: `/threads/${threadChatId}/runs/stream`,
+        body: {
+          input: {
+            messages: [{ role: "user", content: searchedText }]
+          },
+          config: { recursion_limit: 100 },
+          stream_mode: [
+            "messages",
+            "modules",
+            "metadata",
+            "custom",
+            "updates",
+            "messages-tuple",
+            "values"
+          ],
+          stream_subgraphs: true,
+          stream_resumable: true,
+          assistant_id: assistantId,
         },
-        "config": {
-          "recursion_limit": 100
-        },
-        "stream_mode": [
-          "messages",
-          "modules",
-          "metadata",
-          "custom",
-          "updates",
-          "messages-tuple",
-          "values"
-        ],
-        "stream_subgraphs": true,
-        "stream_resumable": true,
-        "assistant_id": "agent",
-        "on_disconnect": "cancel"
-      },
+        options: { on_disconnect: "cancel" },
 
-      onChunk: (event, data) => {
-        console.log(event, data);
-        if (event !== "messages") return;
-        setChatIsLoading(true);
-        // Detect result marker
-        if (
-          data.some(msg => msg.thread_id && msg.langgraph_node === "result")
-        ) {
-          hasResultRef.current = true;
-        }
+        onChunk: (event, data) => {
+          if (event !== "messages") return;
 
-        // Collect AI chunks after result
-        if (hasResultRef.current) {
-          const aiChunks = data.filter(
-            msg => msg.type === "AIMessageChunk"
-          );
+          if (
+            data.some(msg =>
+              msg.thread_id &&
+              (
+                MODULE_STREAM_RULES[assistantId].acceptEvents?.length === 0 ||
+                (MODULE_STREAM_RULES[assistantId].acceptEvents && MODULE_STREAM_RULES[assistantId].acceptEvents?.includes(msg.langgraph_node))
+              )
+            )
+          ) {
+            hasResultRef.current = true;
+          }
 
-          if (aiChunks.length) {
-            aiChunks.forEach(msg => {
-              const existingIndex = streamedListRef.current.findIndex(
-                m => m.id === msg.id
-              );
+          if (!hasResultRef.current) return;
 
-              if (existingIndex !== -1) {
-                // 🔁 SAME ID → append content
-                streamedListRef.current[existingIndex].content += msg.content;
+          data
+            .filter(msg => msg.type === "AIMessageChunk")
+            .forEach(msg => {
+              const idx = streamedListRef.current.findIndex(m => m.id === msg.id);
+              if (idx !== -1) {
+                streamedListRef.current[idx].content += msg.content;
               } else {
-                // 🆕 FIRST chunk → create message
                 streamedListRef.current.push({
                   id: msg.id,
                   role: "assistant",
@@ -1887,21 +1900,33 @@ export default function workSpaceLayout() {
               }
             });
 
-            // 🔄 trigger UI update
-            setNewStreamingList([...streamedListRef.current]);
-          }
-        }
+          // ✅ reflect ref → UI
+          setNewStreamingList([...streamedListRef.current]);
+        },
 
-      },
-      onDone: () => {
-        setSearchedText('');
-        setSearchedMessages([]);
-        setChatIsLoading(false);
-        hasResultRef.current = false;
-      },
-      onError: console.error,
-    });
-  }, [threadChatId, searchedText])
+        onDone: () => {
+          setSearchedText('');
+          setSearchedMessages([]);
+          setChatIsLoading(false);
+          hasResultRef.current = false;
+          if (initialMessage) {
+            navigate(`/chat/${threadChatId}`, {
+              replace: true, state: {
+                initialMessage: null,
+                assistant_id: assistantId
+              }
+            });
+          }
+          else {
+            setLoadHistoryToggle("load");
+          }
+        },
+
+        onError: console.error,
+      });
+    }, 500)
+  }, [threadChatId, searchedText]);
+
 
   useEffect(() => {
     if (threadChatId) {
@@ -1910,7 +1935,7 @@ export default function workSpaceLayout() {
       // threadHistory(threadChatId);
     }
   }, [threadChatId])
-  
+
 
   useEffect(() => {
     if (!initialMessage) return;
@@ -1925,12 +1950,53 @@ export default function workSpaceLayout() {
     ]);
   }, [initialMessage]);
 
+  useEffect(() => {
+    if (!threadChatId) return;
+    let cancelled = false;
+    if(["initial" , "load"].includes(loadHistoryToggle)){
+      threadHistory(threadChatId).then((response) => {
+        if (cancelled) return;
+  
+        const historyMessages = Array.isArray(response) ? response : [];
+  
+        const filteredMessages = [];
+  
+        const msg_values = historyMessages[0]?.values?.messages;
+        for (let i = 0; i < msg_values?.length; i++) {
+  
+          const msg = msg_values[i];
+  
+          if (!msg) continue;
+          if (msg.type !== "human" && msg.type !== "ai") continue;
+          if (typeof msg.content !== "string") continue;
+  
+          filteredMessages.push({
+            id: msg.id,
+            role: msg.type === "human" ? "user" : "assistant",
+            content: msg.content
+          });
+        }
+  
+        streamedListRef.current = filteredMessages;
+        console.log("Fetched thread history messages:", filteredMessages);
+        setNewStreamingList(filteredMessages);
+      });
+  
+      return () => {
+        cancelled = true;
+      };
+    }
+  }, [loadHistoryToggle]);
+
+
   const openNewChat = () => {
     setIsStreamNewChat(true);
     streamedListRef.current = [];
     setNewStreamingList([]);
     setChatIsLoading(false);
+    setLoadHistoryToggle("");
     setSearchedText('');
+    setAssistantId('agent');
   }
 
 
@@ -1942,6 +2008,7 @@ export default function workSpaceLayout() {
         navigate(`/chat/${response.thread_id}`, {
           state: {
             initialMessage: input,
+            assistant_id: assistantId
           },
           replace: true,
         });
@@ -1966,7 +2033,6 @@ export default function workSpaceLayout() {
               isCollapsed={isLeftCollapsed}
               isLoading={isLoading}
               navigate={navigate}
-              onOpenThread={handleThreadId}
               onStartNewChat={openNewChat}
               onToggleTheme={toggleTheme}
               onToggleCollapse={toggleLeftCollapse}
@@ -1982,9 +2048,9 @@ export default function workSpaceLayout() {
             updatedevents={updatedevents}
             input={input}
             isLoading={chatIsLoading}
-            messages={normalizedMessages}
+            // messages={normalizedMessages}
             isStreamNewChat={isStreamNewChat}
-            sandboxUrl={overrideSandboxUrl ?? sandboxUrl}
+            sandboxUrl={streamSandboxUrl}
             onCopy={handleCopy}
             onDownload={handleDownload}
             onInputChange={handleInputChange}

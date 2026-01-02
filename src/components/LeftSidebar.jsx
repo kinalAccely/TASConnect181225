@@ -39,7 +39,7 @@ export default function LeftSidebar({
   refreshKey,
   selectedChatId,
 }) {
-  const navigate = useNavigate()  
+  const navigate = useNavigate()
   const [threads, setThreads] = useState([]);
   const [currentId, setCurrentId] = useState(null);
   const [creating, setCreating] = useState(false);
@@ -121,11 +121,12 @@ export default function LeftSidebar({
     </button>
   ) : null;
 
-  const handleNavigate = (targetId) => {
+  const handleNavigate = (item) => {
+    const targetId = item.thread_id;
     if (!targetId) {
       return;
     }
-    navigate(`/chat/${targetId}`);
+    navigate(`/chat/${targetId}`, { state: { assistant_id: item.metadata.graph_id , loadHistory : true} });
     setCurrentId(targetId);
   };
 
@@ -196,7 +197,7 @@ export default function LeftSidebar({
               const rawId = resolveThreadId(item);
               const normalizedId = rawId !== null && rawId !== undefined ? String(rawId) : null;
               const key = normalizedId ?? resolveThreadLabel(item);
-              const label = resolveThreadLabel(item);
+              const label = item.metadata.thread_name;
               const isSelected =
                 normalizedSelectedId !== null && normalizedId === normalizedSelectedId;
               const isNavigable = Boolean(normalizedId);
@@ -204,7 +205,7 @@ export default function LeftSidebar({
                 <button
                   key={key}
                   type="button"
-                  onClick={() => handleNavigate(normalizedId)}
+                  onClick={() => handleNavigate(item)}
                   className={`rounded-2xl border px-3 py-2 text-left transition-all duration-200 ${isSelected || normalizedId === currentId
                     ? "border-[var(--brand)] bg-[var(--brand-lighter)] text-black shadow-[0_6px_18px_rgba(242,60,57,0.16)]"
                     : "border-transparent bg-zinc-50 text-zinc-600 hover:border-[var(--brand-light)] hover:bg-[var(--brand-lighter)] hover:text-black"

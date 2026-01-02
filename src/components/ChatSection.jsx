@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useRef, useEffect , useCallback} from "react";
+import React, { useState, useMemo, useRef, useEffect, useCallback } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from 'remark-gfm';
 import { useLocation } from "react-router-dom";
@@ -68,7 +68,7 @@ export default function ChatSection({
     { id: "live_demo", label: "Live Demo", icon: <IoPlayCircleOutline size={18} />, description: "Interact with a live sandbox" },
   ];
 
-const handleDownload = useCallback((content) => {
+  const handleDownload = useCallback((content) => {
     if (!content) return;
 
     // 1. Process Markdown to HTML for Word compatibility
@@ -132,7 +132,7 @@ const handleDownload = useCallback((content) => {
   }, [location.pathname, threadId]);
 
   const [activeModule, setActiveModule] = useState(() =>
-    isNewChat ? slashOptions[0] : null
+    isStreamNewChat ? slashOptions[0] : null
   );
 
   const [copiedMessageKey, setCopiedMessageKey] = useState(null);
@@ -167,7 +167,7 @@ const handleDownload = useCallback((content) => {
     }
   }, [input]);
 
-  const showSlashMenu = isNewChat && newStreamingList.length === 0 && input.startsWith("/");
+  const showSlashMenu = isStreamNewChat && newStreamingList.length === 0 && input.startsWith("/");
   const [showScrollButton, setShowScrollButton] = useState(false);
 
   const scrollToBottom = () => {
@@ -324,7 +324,7 @@ const handleDownload = useCallback((content) => {
                       {isTrainingModule && (
                         <>
                           <button
-                            onClick={() => handleCopy(msg.text, msgId)}
+                            onClick={() => handleCopy(msg.content, msgId)}
                             className="text-[11px] font-medium text-zinc-500 hover:text-[var(--brand)]
                     flex items-center gap-1"
                           >
@@ -455,11 +455,15 @@ const handleDownload = useCallback((content) => {
                 rows={1}
                 value={input}
                 onChange={(e) => onInputChange(e.target.value)}
-                onKeyDown={(e) =>
-                  e.key === "Enter" &&
-                  !e.shiftKey &&
-                  (e.preventDefault())
-                }
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" && !e.shiftKey) {
+                    e.preventDefault();
+
+                    if (!isLoading) {
+                      handleSubmit();
+                    }
+                  }
+                }}
                 placeholder={
                   isStreamNewChat && newStreamingList.length === 0
                     ? "Type / to change mode..."
@@ -467,6 +471,7 @@ const handleDownload = useCallback((content) => {
                 }
                 className="flex-1 resize-none text-sm py-2.5 px-2 min-h-[44px] max-h-[200px]"
               />
+
 
               <button
                 onClick={isLoading ? onStop : handleSubmit}
