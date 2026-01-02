@@ -146,7 +146,7 @@ function parseSSE(buffer, onEvent) {
   return incomplete;
 }
 
-export async function createThread({ title, assistantId }) {
+export async function createThread(title, assistantId) {
   const response = await fetch(`${normalizeBaseUrl(API_BASE_URL)}/threads`, {
     method: "POST",
     headers: {

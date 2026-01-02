@@ -2018,7 +2018,7 @@ export default function workSpaceLayout() {
 
   useEffect(() => {
     if (!searchedText || threadChatId) return;
-    createThread({ url: '/threads', body: { searchedText, assistantId } }).then((response) => {
+    createThread(searchedText, assistantId).then((response) => {
       if (response && response.thread_id) {
         navigate(`/chat/${response.thread_id}`, {
           state: {
