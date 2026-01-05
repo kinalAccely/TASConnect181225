@@ -454,7 +454,7 @@ export default function ChatSection({
             /* ================= COPY BUTTON ================= */
             const CopyIconButton = ({ className }) => (
               <button
-                onClick={() => handleCopy(msg.text, msgId)}
+                onClick={() => handleCopy(msg.content, msgId)}
                 className={className}
               >
                 {copiedMessageKey === msgId ? (

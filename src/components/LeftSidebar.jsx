@@ -49,6 +49,13 @@ export default function LeftSidebar({
       ? String(selectedChatId)
       : null;
 
+
+  const [threadSelectedId , setThreadSelectedId] = useState('');
+  useEffect(() => {
+    console.log(selectedChatId);
+    setThreadSelectedId(selectedChatId);
+  }, [selectedChatId])
+
   useEffect(() => {
     let isMounted = true;
     setCurrentId(window.location.pathname.split("/").pop());
@@ -84,50 +91,50 @@ export default function LeftSidebar({
     }
   };
 
-  const expandedThemeToggle = onToggleTheme ? (
-    <button
-      type="button"
-      onClick={handleToggleTheme}
-      className="group inline-flex items-center gap-2 rounded-full border border-zinc-200 bg-white px-3 py-1.5 text-[10px] font-semibold uppercase tracking-[0.32em] text-zinc-500 transition hover:border-[var(--brand-light)] hover:text-black focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--brand-light)]"
-      aria-pressed={isDarkTheme}
-    >
-      <span className="flex items-center gap-2">
-        <span
-          className={`relative inline-flex h-6 w-12 items-center rounded-full border transition-all duration-200 ${isDarkTheme
-            ? "border-zinc-600 bg-zinc-800"
-            : "border-[var(--brand-light)] bg-zinc-100"
-            }`}
-        >
-          <span
-            className={`absolute left-1 inline-flex h-4 w-4 items-center justify-center rounded-full bg-white text-[var(--brand)] shadow transition-transform duration-200 ${isDarkTheme ? "translate-x-6 text-zinc-700" : "translate-x-0"
-              }`}
-          >
-            {isDarkTheme ? <IoMoon size={12} /> : <IoSunny size={12} />}
-          </span>
-        </span>
-        <span>{isDarkTheme ? "Dark" : "Light"}</span>
-      </span>
-    </button>
-  ) : null;
+  // const expandedThemeToggle = onToggleTheme ? (
+  //   <button
+  //     type="button"
+  //     onClick={handleToggleTheme}
+  //     className="group inline-flex items-center gap-2 rounded-full border border-zinc-200 bg-white px-3 py-1.5 text-[10px] font-semibold uppercase tracking-[0.32em] text-zinc-500 transition hover:border-[var(--brand-light)] hover:text-black focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--brand-light)]"
+  //     aria-pressed={isDarkTheme}
+  //   >
+  //     <span className="flex items-center gap-2">
+  //       <span
+  //         className={`relative inline-flex h-6 w-12 items-center rounded-full border transition-all duration-200 ${isDarkTheme
+  //           ? "border-zinc-600 bg-zinc-800"
+  //           : "border-[var(--brand-light)] bg-zinc-100"
+  //           }`}
+  //       >
+  //         <span
+  //           className={`absolute left-1 inline-flex h-4 w-4 items-center justify-center rounded-full bg-white text-[var(--brand)] shadow transition-transform duration-200 ${isDarkTheme ? "translate-x-6 text-zinc-700" : "translate-x-0"
+  //             }`}
+  //         >
+  //           {isDarkTheme ? <IoMoon size={12} /> : <IoSunny size={12} />}
+  //         </span>
+  //       </span>
+  //       <span>{isDarkTheme ? "Dark" : "Light"}</span>
+  //     </span>
+  //   </button>
+  // ) : null;
 
-  const collapsedThemeToggle = onToggleTheme ? (
-    <button
-      type="button"
-      onClick={handleToggleTheme}
-      className={`flex h-10 w-10 items-center justify-center rounded-2xl border border-zinc-200 bg-white text-zinc-600 shadow transition hover:border-[var(--brand-light)] hover:text-[var(--brand)]`}
-      aria-pressed={isDarkTheme}
-    >
-      {isDarkTheme ? <IoMoon size={16} /> : <IoSunny size={16} />}
-      <span className="sr-only">Toggle theme</span>
-    </button>
-  ) : null;
+  // const collapsedThemeToggle = onToggleTheme ? (
+  //   <button
+  //     type="button"
+  //     onClick={handleToggleTheme}
+  //     className={`flex h-10 w-10 items-center justify-center rounded-2xl border border-zinc-200 bg-white text-zinc-600 shadow transition hover:border-[var(--brand-light)] hover:text-[var(--brand)]`}
+  //     aria-pressed={isDarkTheme}
+  //   >
+  //     {isDarkTheme ? <IoMoon size={16} /> : <IoSunny size={16} />}
+  //     <span className="sr-only">Toggle theme</span>
+  //   </button>
+  // ) : null;
 
   const handleNavigate = (item) => {
     const targetId = item.thread_id;
     if (!targetId) {
       return;
     }
-    navigate(`/chat/${targetId}`, { state: { assistant_id: item.metadata.graph_id , loadHistory : `load_${Date.now()}`} });
+    navigate(`/chat/${targetId}`, { state: { assistant_id: item.metadata.graph_id, loadHistory: `load_${Date.now()}` } });
     setCurrentId(targetId);
   };
 
@@ -200,15 +207,14 @@ export default function LeftSidebar({
               const key = normalizedId ?? resolveThreadLabel(item);
               const label = item.metadata.thread_name;
               const isSelected =
-                normalizedSelectedId !== null && normalizedId === normalizedSelectedId;
+                threadSelectedId && normalizedId === threadSelectedId;
               const isNavigable = Boolean(normalizedId);
               return (
                 <button
                   key={key}
                   type="button"
                   onClick={() => handleNavigate(item)}
-                  className={`rounded-2xl border px-3 py-2 text-left transition-all duration-200 ${isSelected || normalizedId === currentId
-                    ? "border-[var(--brand)] bg-[var(--brand-lighter)] text-black shadow-[0_6px_18px_rgba(242,60,57,0.16)]"
+                  className={`rounded-2xl border px-3 py-2 text-left transition-all duration-200 ${isSelected ? "border-[var(--brand)] bg-[var(--brand-lighter)] text-black shadow-[0_6px_18px_rgba(242,60,57,0.16)]"
                     : "border-transparent bg-zinc-50 text-zinc-600 hover:border-[var(--brand-light)] hover:bg-[var(--brand-lighter)] hover:text-black"
                     } ${isNavigable ? "" : "cursor-default opacity-60"}`}
                   disabled={!isNavigable}

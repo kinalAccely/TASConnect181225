@@ -311,7 +311,7 @@ const extractMessageText = (message) => {
 
 const MODULE_STREAM_RULES = {
   agent: {
-    acceptEvents: ["updates", "result"],
+    acceptEvents: ["updates", "result", "router"],
     hideIntermediateAssistants: true,
   },
 
@@ -1817,6 +1817,11 @@ export default function workSpaceLayout() {
   const state_assistant_id = location.state?.assistant_id || location.state?.assistantId || 'agent';
   const loadHistory = location.state?.loadHistory || location.state?.loadHistory || '';
   const [streamSandboxUrl, setStreamSandboxUrl] = useState('');
+  const [selectedThreadChatId, setThreadChatId] = useState('');
+
+  useEffect(() => {
+    setThreadChatId(threadChatId);
+  }, [threadChatId])
   useEffect(() => {
     setLoadHistoryToggle(`load_${Date.now()}`);
   }, [loadHistory])
@@ -1966,7 +1971,7 @@ export default function workSpaceLayout() {
   useEffect(() => {
     if (!threadChatId) return;
     let cancelled = false;
-    // if (loadHistoryToggle.includes("load")) {
+    if (loadHistoryToggle.includes("load")) {
       threadHistory(threadChatId).then((response) => {
         if (cancelled) return;
 
@@ -1999,23 +2004,25 @@ export default function workSpaceLayout() {
       return () => {
         cancelled = true;
       };
-    // }
+    }
   }, [loadHistoryToggle]);
 
 
   const openNewChat = () => {
-    setIsStreamNewChat(true);
     streamedListRef.current = [];
+    setIsStreamNewChat(true);
     setNewStreamingList([]);
     setChatIsLoading(false);
     setLoadHistoryToggle("");
     setSearchedText('');
     setAssistantId('agent');
+    setReloadThread(true);
     setStreamSandboxUrl('');
+    setThreadChatId('');
   }
 
 
-const [reloadThread , setReloadThread] = useState('')
+  const [reloadThread, setReloadThread] = useState('')
   useEffect(() => {
     if (!searchedText || threadChatId) return;
     createThread(searchedText, assistantId).then((response) => {
@@ -2054,7 +2061,7 @@ const [reloadThread , setReloadThread] = useState('')
               onToggleCollapse={toggleLeftCollapse}
               refreshKey={refreshKey}
               refreshThread = {reloadThread}
-              selectedChatId={selectedChatId}
+              selectedChatId={selectedThreadChatId}
             />
           </div>
 
