@@ -4,7 +4,7 @@ import ChatSection from "./components/ChatSection.jsx";
 import RightSidebar from "./components/RightSidebar.jsx";
 import TopHeader from "./components/TopHeader.jsx";
 import { useStream } from "@langchain/langgraph-sdk/react";
-import { resolveAssistantId, fetchThreadById, getStreamMessages, createThread, threadHistory } from "./services/threadService.js";
+import { resolveAssistantId, fetchThreadById, getStreamMessages, createThread, threadHistory, stopStream } from "./services/threadService.js";
 import { useIdleMemo } from "./utils/useIdleMemo.js";
 import { useLocation, useNavigate, useParams } from "react-router-dom";
 
@@ -316,7 +316,7 @@ const MODULE_STREAM_RULES = {
   },
 
   training_module_graph: {
-    acceptEvents: ["aggregator"],
+    acceptEvents: ["aggregator", "router"],
     hideIntermediateAssistants: true,
   },
 
@@ -1809,6 +1809,7 @@ export default function workSpaceLayout() {
   const [searchedText, setSearchedText] = useState('');
   const [newStreamingList, setNewStreamingList] = useState([]);
   const hasResultRef = useRef(false);
+  const triggeringNode = useRef('');
   const streamedListRef = useRef([]);
   const [chatIsLoading, setChatIsLoading] = useState(false);
   const [isStreamNewChat, setIsStreamNewChat] = useState(true);
@@ -1818,6 +1819,7 @@ export default function workSpaceLayout() {
   const loadHistory = location.state?.loadHistory || location.state?.loadHistory || '';
   const [streamSandboxUrl, setStreamSandboxUrl] = useState('');
   const [selectedThreadChatId, setThreadChatId] = useState('');
+  const [customStates , setCustomStates] = useState('');
 
   useEffect(() => {
     setThreadChatId(threadChatId);
@@ -1833,9 +1835,10 @@ export default function workSpaceLayout() {
   }, [state_assistant_id]);
 
 
+  const [runId , setRunId] = useState('');
   useEffect(() => {
     if (!threadChatId || searchedText.length === 0) return;
-
+    setRunId(''); 
     setInput('');
     setLoadHistoryToggle("");
 
@@ -1847,7 +1850,6 @@ export default function workSpaceLayout() {
 
     // ✅ Always update UI snapshot
     setNewStreamingList([...streamedListRef.current]);
-
     setChatIsLoading(true);
 
     setTimeout(() => {
@@ -1874,44 +1876,55 @@ export default function workSpaceLayout() {
         options: { on_disconnect: "cancel" },
 
         onChunk: (event, data) => {
+          if(event == 'metadata'){
+            setRunId(data.run_id);
+          }
+          if(event == 'custom'){
+            setCustomStates(data.status)
+          }
           if (!["messages", "updates"].includes(event)) return;
 
           if (event === 'messages') {
-            if (
-              data.some(msg =>
-                msg.thread_id &&
-                (
-                  MODULE_STREAM_RULES[assistantId].acceptEvents?.length === 0 ||
-                  (MODULE_STREAM_RULES[assistantId].acceptEvents && MODULE_STREAM_RULES[assistantId].acceptEvents?.includes(msg.langgraph_node))
-                )
-              )
-            ) {
-              hasResultRef.current = true;
-            }
+            // const matchedMsg = data.find(msg =>
+            //   msg.thread_id &&
+            //   (
+            //     MODULE_STREAM_RULES[assistantId].acceptEvents?.length === 0 ||
+            //     MODULE_STREAM_RULES[assistantId].acceptEvents?.includes(msg.langgraph_node)
+            //   )
+            // );
 
+            // if (matchedMsg) {
+            //   hasResultRef.current = true;
+            // }
+
+            hasResultRef.current = MODULE_STREAM_RULES[assistantId].acceptEvents?.length === 0 || MODULE_STREAM_RULES[assistantId].acceptEvents?.includes(data[1].langgraph_node)
             if (!hasResultRef.current) return;
 
             data
               .filter(msg => msg.type === "AIMessageChunk")
               .forEach(msg => {
                 const idx = streamedListRef.current.findIndex(m => m.id === msg.id);
-                if (idx !== -1) {
-                  streamedListRef.current[idx].content += msg.content;
-                } else {
-                  streamedListRef.current.push({
-                    id: msg.id,
-                    role: "assistant",
-                    content: msg.content
-                  });
+                if(msg.content){
+                  if (idx !== -1) {
+                    streamedListRef.current[idx].content += msg.content;
+                  } 
+                  else {
+                    streamedListRef.current.push({
+                      id: msg.id,
+                      role: "assistant",
+                      content: msg.content,
+                      langgraph_node: data[1].langgraph_node // ✅ stored here
+                    });
+                  }
                 }
+                console.log(data[1].langgraph_node , msg , streamedListRef.current)
               });
 
             setNewStreamingList([...streamedListRef.current]);
           }
 
-          else{
-            console.log(data);
-            if(data?.invoke_init?.sandbox_url){
+          else {
+            if (data?.invoke_init?.sandbox_url) {
               setStreamSandboxUrl(data.invoke_init.sandbox_url);
             }
           }
@@ -1936,7 +1949,7 @@ export default function workSpaceLayout() {
             });
           }
           else {
-            setLoadHistoryToggle("load");
+            // setLoadHistoryToggle("load");
           }
         },
 
@@ -2044,6 +2057,13 @@ export default function workSpaceLayout() {
     setSearchedText(input);
   }
 
+  const handleStreamStop = ()=>{
+    setChatIsLoading(false);
+    stopStream(threadChatId , runId).then(res=>{
+      console.log(res);
+    })
+  }
+
   return (
     <div className={containerClassName}>
       <div className="flex h-full w-full min-h-0 max-w-8xl flex-col gap-4">
@@ -2054,13 +2074,13 @@ export default function workSpaceLayout() {
             <LeftSidebar
               theme={theme}
               isCollapsed={isLeftCollapsed}
-              isLoading={isLoading}
+              isLoading={chatIsLoading}
               navigate={navigate}
               onStartNewChat={openNewChat}
               onToggleTheme={toggleTheme}
               onToggleCollapse={toggleLeftCollapse}
               refreshKey={refreshKey}
-              refreshThread = {reloadThread}
+              refreshThread={reloadThread}
               selectedChatId={selectedThreadChatId}
             />
           </div>
@@ -2075,10 +2095,11 @@ export default function workSpaceLayout() {
             // messages={normalizedMessages}
             isStreamNewChat={isStreamNewChat}
             sandboxUrl={streamSandboxUrl}
+            customStates = {customStates}
             onCopy={handleCopy}
             onDownload={handleDownload}
             onInputChange={handleInputChange}
-            onStop={handleStop}
+            onStop={handleStreamStop}
             handleSubmit={handleSubmit}
             onTimelineStepsChange={setTimelineSteps}
             stage={stage}
@@ -2086,7 +2107,7 @@ export default function workSpaceLayout() {
             isTransitioning={isThreadTransitioning}
             assistantSuggestions={assistantSuggestions}
             currentAssistantId={assistantId}
-            activeModule = {assistantId}
+            activeModule={assistantId}
             onAssistantSuggestionSelect={handleAssistantSuggestionSelect}
             shouldShowAssistantSuggestions={shouldShowAssistantSuggestions}
             threadId={activeThreadId}

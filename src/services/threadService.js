@@ -178,3 +178,19 @@ export async function threadHistory(threadId) {
   const history = await response.json();
   return history;
 }
+
+export async function stopStream(thread_id, run_id) {
+  if (!thread_id || !run_id) return;
+  const response = await fetch(`${normalizeBaseUrl(API_BASE_URL)}/threads/${thread_id}/runs/${run_id}/cancel?wait=0&action=cancel`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body : {}
+  });
+  if (!response.ok) {
+    throw new Error(`Failed to fetch thread stopStreaming: ${response.status} ${response.statusText}`);
+  }
+  const stopStreaming = await response.json();
+  return stopStreaming;
+}

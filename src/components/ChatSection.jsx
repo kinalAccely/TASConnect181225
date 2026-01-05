@@ -21,6 +21,7 @@ export default function ChatSection({
   chatBodyRef,
   input,
   isLoading,
+  customStates,
   handleSubmit,
   isStreamNewChat,
   messages = [],
@@ -62,6 +63,12 @@ export default function ChatSection({
     }
   };
 
+  useEffect(() => {
+    if (isStreamNewChat) {
+      setShowScrollButton(false);
+    }
+  }, [isStreamNewChat])
+
   const slashOptions = [
     { id: "agent", label: "Chat", icon: <IoChatbubbleEllipsesOutline size={18} />, description: "Standard conversation mode" },
     { id: "training_module_graph", label: "Training", icon: <IoSchoolOutline size={18} />, description: "Generate educational content" },
@@ -69,65 +76,65 @@ export default function ChatSection({
   ];
 
   const handleDownload = useCallback((content) => {
-  if (!content) return;
+    if (!content) return;
 
-  let formattedContent = content
+    let formattedContent = content
 
-    /* ---------- HEADINGS ---------- */
-    .replace(/^### (.*)$/gm, '<h3>$1</h3>')
-    .replace(/^## (.*)$/gm, '<h2>$1</h2>')
-    .replace(/^# (.*)$/gm, '<h1>$1</h1>')
+      /* ---------- HEADINGS ---------- */
+      .replace(/^### (.*)$/gm, '<h3>$1</h3>')
+      .replace(/^## (.*)$/gm, '<h2>$1</h2>')
+      .replace(/^# (.*)$/gm, '<h1>$1</h1>')
 
-    /* ---------- HORIZONTAL RULE ---------- */
-    .replace(/^\s*---\s*$/gm, '<hr />')
+      /* ---------- HORIZONTAL RULE ---------- */
+      .replace(/^\s*---\s*$/gm, '<hr />')
 
-    /* ---------- BOLD ---------- */
-    .replace(/\*\*(.*?)\*\*/g, '<b>$1</b>')
+      /* ---------- BOLD ---------- */
+      .replace(/\*\*(.*?)\*\*/g, '<b>$1</b>')
 
-    /* ---------- TABLES (GFM) ---------- */
-    // Convert table header row
-    .replace(
-      /^\|(.+)\|\n\|([-\s|:]+)\|\n((?:\|.*\|\n?)*)/gm,
-      (_, header, _sep, body) => {
-        const headers = header
-          .split('|')
-          .map(h => `<th>${h.trim()}</th>`)
-          .join('');
+      /* ---------- TABLES (GFM) ---------- */
+      // Convert table header row
+      .replace(
+        /^\|(.+)\|\n\|([-\s|:]+)\|\n((?:\|.*\|\n?)*)/gm,
+        (_, header, _sep, body) => {
+          const headers = header
+            .split('|')
+            .map(h => `<th>${h.trim()}</th>`)
+            .join('');
 
-        const rows = body
-          .trim()
-          .split('\n')
-          .map(row => {
-            const cells = row
-              .replace(/^\||\|$/g, '')
-              .split('|')
-              .map(c => `<td>${c.trim()}</td>`)
-              .join('');
-            return `<tr>${cells}</tr>`;
-          })
-          .join('');
+          const rows = body
+            .trim()
+            .split('\n')
+            .map(row => {
+              const cells = row
+                .replace(/^\||\|$/g, '')
+                .split('|')
+                .map(c => `<td>${c.trim()}</td>`)
+                .join('');
+              return `<tr>${cells}</tr>`;
+            })
+            .join('');
 
-        return `
+          return `
           <table>
             <thead><tr>${headers}</tr></thead>
             <tbody>${rows}</tbody>
           </table>
         `;
-      }
-    )
+        }
+      )
 
-    /* ---------- BULLET LISTS ---------- */
-    .replace(/^\s*[-•]\s+(.*)$/gm, '<li>$1</li>')
-    .replace(/(<li>.*<\/li>)/gs, '<ul>$1</ul>')
+      /* ---------- BULLET LISTS ---------- */
+      .replace(/^\s*[-•]\s+(.*)$/gm, '<li>$1</li>')
+      .replace(/(<li>.*<\/li>)/gs, '<ul>$1</ul>')
 
-    /* ---------- PARAGRAPHS ---------- */
-    .replace(/\n{2,}/g, '</p><p>')
-    .replace(/\n/g, ' ');
+      /* ---------- PARAGRAPHS ---------- */
+      .replace(/\n{2,}/g, '</p><p>')
+      .replace(/\n/g, ' ');
 
-  formattedContent = `<p>${formattedContent}</p>`;
+    formattedContent = `<p>${formattedContent}</p>`;
 
-  /* ---------- WORD-FRIENDLY CSS ---------- */
-  const cssStyles = `
+    /* ---------- WORD-FRIENDLY CSS ---------- */
+    const cssStyles = `
     <style>
       body {
         font-family: 'Segoe UI', Arial, sans-serif;
@@ -205,8 +212,8 @@ export default function ChatSection({
     </style>
   `;
 
-  /* ---------- WORD HTML WRAPPER ---------- */
-  const htmlContent = `
+    /* ---------- WORD HTML WRAPPER ---------- */
+    const htmlContent = `
     <html xmlns:o="urn:schemas-microsoft-com:office:office"
           xmlns:w="urn:schemas-microsoft-com:office:word"
           xmlns="http://www.w3.org/TR/REC-html40">
@@ -220,19 +227,20 @@ export default function ChatSection({
     </html>
   `;
 
-  const blob = new Blob([htmlContent], {
-    type: "application/msword",
-  });
+    const blob = new Blob([htmlContent], {
+      type: "application/msword",
+    });
 
-  const url = URL.createObjectURL(blob);
-  const link = document.createElement("a");
-  link.href = url;
-  link.download = `workspace_export_${Date.now()}.doc`;
-  document.body.appendChild(link);
-  link.click();
-  document.body.removeChild(link);
-  URL.revokeObjectURL(url);
-}, []);
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = `workspace_export_${Date.now()}.doc`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+  }, []);
+
 
 
 
@@ -325,67 +333,67 @@ export default function ChatSection({
     return () => chatContainer.removeEventListener('scroll', handleScroll);
   }, [chatBodyRef]);
   const markdownComponents = {
-  /* ---------- HEADINGS ---------- */
-  h1: ({ node, ...props }) => (
-    <h1 className="text-2xl font-bold mb-4 mt-6 text-zinc-900" {...props} />
-  ),
-  h2: ({ node, ...props }) => (
-    <h2 className="text-xl font-semibold mb-3 mt-5 text-zinc-900 border-b pb-1" {...props} />
-  ),
-  h3: ({ node, ...props }) => (
-    <h3 className="text-lg font-semibold mb-2 mt-4 text-zinc-800" {...props} />
-  ),
+    /* ---------- HEADINGS ---------- */
+    h1: ({ node, ...props }) => (
+      <h1 className="text-2xl font-bold mb-4 mt-6 text-zinc-900" {...props} />
+    ),
+    h2: ({ node, ...props }) => (
+      <h2 className="text-xl font-semibold mb-3 mt-5 text-zinc-900 border-b pb-1" {...props} />
+    ),
+    h3: ({ node, ...props }) => (
+      <h3 className="text-lg font-semibold mb-2 mt-4 text-zinc-800" {...props} />
+    ),
 
-  /* ---------- TEXT ---------- */
-  p: ({ node, ...props }) => (
-    <p className="mb-3 last:mb-0 leading-relaxed text-zinc-700" {...props} />
-  ),
-  strong: ({ node, ...props }) => (
-    <strong className="font-semibold text-zinc-900" {...props} />
-  ),
+    /* ---------- TEXT ---------- */
+    p: ({ node, ...props }) => (
+      <p className="mb-3 last:mb-0 leading-relaxed text-zinc-700" {...props} />
+    ),
+    strong: ({ node, ...props }) => (
+      <strong className="font-semibold text-zinc-900" {...props} />
+    ),
 
-  /* ---------- LISTS ---------- */
-  ul: ({ node, ...props }) => (
-    <ul className="mb-3 ml-5 list-disc space-y-1" {...props} />
-  ),
-  ol: ({ node, ...props }) => (
-    <ol className="mb-3 ml-5 list-decimal space-y-1" {...props} />
-  ),
-  li: ({ node, ...props }) => (
-    <li className="pl-1 text-zinc-700" {...props} />
-  ),
+    /* ---------- LISTS ---------- */
+    ul: ({ node, ...props }) => (
+      <ul className="mb-3 ml-5 list-disc space-y-1" {...props} />
+    ),
+    ol: ({ node, ...props }) => (
+      <ol className="mb-3 ml-5 list-decimal space-y-1" {...props} />
+    ),
+    li: ({ node, ...props }) => (
+      <li className="pl-1 text-zinc-700" {...props} />
+    ),
 
-  /* ---------- TABLES (FIX) ---------- */
-  table: ({ node, ...props }) => (
-    <div className="overflow-x-auto my-4">
-      <table
-        className="min-w-full border border-zinc-200 rounded-lg border-collapse text-sm"
+    /* ---------- TABLES (FIX) ---------- */
+    table: ({ node, ...props }) => (
+      <div className="overflow-x-auto my-4">
+        <table
+          className="min-w-full border border-zinc-200 rounded-lg border-collapse text-sm"
+          {...props}
+        />
+      </div>
+    ),
+    thead: ({ node, ...props }) => (
+      <thead className="bg-zinc-100" {...props} />
+    ),
+    tbody: ({ node, ...props }) => (
+      <tbody className="divide-y divide-zinc-200" {...props} />
+    ),
+    tr: ({ node, ...props }) => (
+      <tr className="hover:bg-zinc-50" {...props} />
+    ),
+    th: ({ node, ...props }) => (
+      <th
+        className="border border-zinc-200 px-3 py-2 text-left font-semibold text-zinc-900"
         {...props}
       />
-    </div>
-  ),
-  thead: ({ node, ...props }) => (
-    <thead className="bg-zinc-100" {...props} />
-  ),
-  tbody: ({ node, ...props }) => (
-    <tbody className="divide-y divide-zinc-200" {...props} />
-  ),
-  tr: ({ node, ...props }) => (
-    <tr className="hover:bg-zinc-50" {...props} />
-  ),
-  th: ({ node, ...props }) => (
-    <th
-      className="border border-zinc-200 px-3 py-2 text-left font-semibold text-zinc-900"
-      {...props}
-    />
-  ),
-  td: ({ node, ...props }) => (
-    <td
-      className="border border-zinc-200 px-3 py-2 text-zinc-700 align-top"
-      {...props}
-    />
-  ),
-};
+    ),
+    td: ({ node, ...props }) => (
+      <td
+        className="border border-zinc-200 px-3 py-2 text-zinc-700 align-top"
+        {...props}
+      />
+    ),
+  };
 
 
 
@@ -446,7 +454,7 @@ export default function ChatSection({
               msg.assistant_id || propsAssistantId || activeModule?.id;
 
             const isTrainingModule =
-              currentAssistantId === "training_module_graph";
+              currentAssistantId === "training_module_graph" && (msg.langgraph_node && msg.langgraph_node != 'router');
 
             const isAgent = currentAssistantId === "agent";
             const isLiveDemo = activeModule?.id === "live_demo";
@@ -588,7 +596,7 @@ export default function ChatSection({
                   <span className="w-1.5 h-1.5 bg-[var(--brand)] rounded-full animate-bounce [animation-delay:-0.3s]" />
                 </div>
                 <span className="text-[12px] font-medium text-zinc-400 italic">
-                  Thinking...
+                  {customStates ? customStates : 'Thinking...'}
                 </span>
               </div>
             </div>
