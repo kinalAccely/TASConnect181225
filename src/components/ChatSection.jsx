@@ -32,9 +32,9 @@ export default function ChatSection({
   sandboxUrl,
   onAssistantSuggestionSelect,
   threadId,
-  updatedevents,
   assistantId: propsAssistantId,
-  currentAssistantId
+  currentAssistantId,
+  showScrollButton
 }) {
   const lastRenderedSandboxUrlRef = useRef(null);
   const shouldRenderSandbox = sandboxUrl && sandboxUrl !== lastRenderedSandboxUrlRef.current;
@@ -62,12 +62,6 @@ export default function ChatSection({
       return trimmed;
     }
   };
-
-  useEffect(() => {
-    if (isStreamNewChat) {
-      setShowScrollButton(false);
-    }
-  }, [isStreamNewChat])
 
   const slashOptions = [
     { id: "agent", label: "Chat", icon: <IoChatbubbleEllipsesOutline size={18} />, description: "Standard conversation mode" },
@@ -254,10 +248,6 @@ export default function ChatSection({
     }
   }, [currentAssistantId]);
 
-  useEffect(() => {
-    setUpdateEventKey(Object.keys(updatedevents));
-  }, [updatedevents])
-
   const isNewChat = useMemo(() => {
     const pathSegments = location.pathname.split('/').filter(Boolean);
     return pathSegments.length === 1 && pathSegments[0] === 'chat' && !threadId;
@@ -275,7 +265,6 @@ export default function ChatSection({
       const matched = slashOptions.find(opt => opt.id === propsAssistantId);
       if (matched) setActiveModule(matched);
     } else {
-      setShowScrollButton(false);
     }
   }, [propsAssistantId, isNewChat]);
 
@@ -300,16 +289,18 @@ export default function ChatSection({
   }, [input]);
 
   const showSlashMenu = isStreamNewChat && newStreamingList.length === 0 && input.startsWith("/");
-  const [showScrollButton, setShowScrollButton] = useState(false);
-
-  const scrollToBottom = () => {
-    if (chatBodyRef.current) {
-      chatBodyRef.current.scrollTo({
-        top: chatBodyRef.current.scrollHeight,
-        behavior: 'smooth'
-      });
-    }
-  };
+  const [scrollBottom , setScrollBottom]  = useState('');
+  useEffect(() => {
+    const scrollToBottom = () => {
+      if (chatBodyRef.current) {
+        chatBodyRef.current.scrollTo({
+          top: chatBodyRef.current.scrollHeight,
+          behavior: 'smooth'
+        });
+      }
+    };
+    scrollToBottom();
+  }, [newStreamingList , scrollBottom , ])
 
   const handleSelectModule = (module) => {
     setActiveModule(module);
@@ -317,21 +308,7 @@ export default function ChatSection({
     onInputChange("");
   };
 
-  const [isAtBottom, setIsAtBottom] = useState(true);
 
-  useEffect(() => {
-    const chatContainer = chatBodyRef.current;
-    if (!chatContainer) return;
-
-    const handleScroll = () => {
-      const isNearBottom =
-        chatContainer.scrollHeight - chatContainer.scrollTop - chatContainer.clientHeight < 300;
-      setShowScrollButton(!isNearBottom);
-    };
-
-    chatContainer.addEventListener('scroll', handleScroll);
-    return () => chatContainer.removeEventListener('scroll', handleScroll);
-  }, [chatBodyRef]);
   const markdownComponents = {
     /* ---------- HEADINGS ---------- */
     h1: ({ node, ...props }) => (
@@ -405,7 +382,7 @@ export default function ChatSection({
 
       {showScrollButton && (
         <button
-          onClick={scrollToBottom}
+          onClick={setScrollBottom(`scroll${Date.now()}`)}
           className="absolute bottom-28 right-8 z-50 flex items-center justify-center
                    bg-white text-[var(--brand)] rounded-full p-2 shadow-lg border
                    border-zinc-200 hover:bg-zinc-50 transition-all animate-bounce"
@@ -506,7 +483,7 @@ export default function ChatSection({
                     }`}
                 >
                   {/* ===== HEADER ACTIONS ===== */}
-                  {(isTrainingModule || isAgent) && (
+                  {(isTrainingModule || isAgent || isLiveDemo) && (
                     <div className="flex items-center justify-end px-2 gap-4">
                       {/* Training → copy + download */}
                       {isTrainingModule && (
@@ -570,7 +547,7 @@ export default function ChatSection({
           })}
 
 
-          {sandboxUrlLink && activeModule.id == 'live_demo' && !isStreamNewChat && (
+          {sandboxUrlLink && activeModule?.id == 'live_demo' && !isStreamNewChat && isLoading && (
             <div className="w-full h-[400px] border border-zinc-200 rounded-2xl overflow-hidden shadow-sm">
               <iframe
                 src={normalizeSandboxUrl(sandboxUrlLink)}
@@ -587,7 +564,7 @@ export default function ChatSection({
           )}
 
 
-          {isLoading && newStreamingList.length > 0 && (
+          {isLoading && newStreamingList.length > 0 && activeModule?.id != 'live_demo' && (
             <div className="flex justify-start">
               <div className="flex items-center gap-2 rounded-2xl border border-zinc-100 bg-white px-5 py-4 shadow-sm">
                 <div className="flex gap-1">
@@ -624,7 +601,7 @@ export default function ChatSection({
         <div className="border-t border-zinc-100 bg-white p-4">
           <div className="relative flex flex-col gap-2 rounded-2xl bg-zinc-50 p-2">
             <div className="flex items-start gap-2">
-              {activeModule && activeModule.id !== "agent" && (
+              {activeModule && activeModule?.id !== "agent" && (
                 <div className="flex items-center gap-1.5 bg-[var(--brand)] text-white px-2.5 py-2 rounded-xl text-[11px] font-bold shadow-sm">
                   <IoLayersOutline size={14} />
                   <span className="max-w-[90px] truncate">

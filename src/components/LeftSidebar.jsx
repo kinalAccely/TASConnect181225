@@ -1,12 +1,16 @@
-import React, { useEffect, useState } from "react";
-import { IoAdd, IoChevronBack, IoChevronForward, IoMoon, IoSunny } from "react-icons/io5";
+import React, { useEffect, useLayoutEffect, useRef, useState } from "react";
+import {
+  IoAdd,
+  IoChevronBack,
+  IoChevronForward,
+} from "react-icons/io5";
 import { fetchThreads } from "../services/threadService.js";
 import { useNavigate } from "react-router-dom";
 
+/* ---------------- helpers ---------------- */
+
 const resolveThreadId = (thread) => {
-  if (!thread || typeof thread !== "object") {
-    return null;
-  }
+  if (!thread || typeof thread !== "object") return null;
   return (
     thread.id ??
     thread.thread_id ??
@@ -17,9 +21,7 @@ const resolveThreadId = (thread) => {
 };
 
 const resolveThreadLabel = (thread) => {
-  if (!thread || typeof thread !== "object") {
-    return "Untitled Thread";
-  }
+  if (!thread || typeof thread !== "object") return "Untitled Thread";
   return (
     thread.name ??
     thread.title ??
@@ -29,6 +31,8 @@ const resolveThreadLabel = (thread) => {
   );
 };
 
+/* ---------------- component ---------------- */
+
 export default function LeftSidebar({
   isCollapsed,
   isLoading,
@@ -37,39 +41,31 @@ export default function LeftSidebar({
   onStartNewChat,
   onToggleTheme,
   onToggleCollapse,
-  refreshKey,
   selectedChatId,
 }) {
-  const navigate = useNavigate()
+  const navigate = useNavigate();
+
   const [threads, setThreads] = useState([]);
-  const [currentId, setCurrentId] = useState(null);
   const [creating, setCreating] = useState(false);
-  const normalizedSelectedId =
-    selectedChatId !== undefined && selectedChatId !== null
-      ? String(selectedChatId)
-      : null;
 
+  /* 🔒 scroll preservation */
+  const historyRef = useRef(null);
+  const scrollPosRef = useRef(0);
 
-  const [threadSelectedId , setThreadSelectedId] = useState('');
-  useEffect(() => {
-    console.log(selectedChatId);
-    setThreadSelectedId(selectedChatId);
-  }, [selectedChatId])
+  /* ---------------- effects ---------------- */
 
   useEffect(() => {
     let isMounted = true;
-    setCurrentId(window.location.pathname.split("/").pop());
+
     fetchThreads()
       .then((data) => {
-        if (!isMounted) {
-          return;
-        }
+        if (!isMounted) return;
 
         const normalized = Array.isArray(data)
           ? data
           : Array.isArray(data?.threads)
-            ? data.threads
-            : [];
+          ? data.threads
+          : [];
 
         setThreads(normalized);
       })
@@ -82,99 +78,74 @@ export default function LeftSidebar({
     };
   }, [refreshThread]);
 
-  const hasThreads = threads.length > 0;
-  const isDarkTheme = theme === "dark";
+  /* save scroll */
+  useEffect(() => {
+    const el = historyRef.current;
+    if (!el) return;
 
-  const handleToggleTheme = () => {
-    if (typeof onToggleTheme === "function") {
-      onToggleTheme();
+    const onScroll = () => {
+      scrollPosRef.current = el.scrollTop;
+    };
+
+    el.addEventListener("scroll", onScroll);
+    return () => el.removeEventListener("scroll", onScroll);
+  }, []);
+
+  /* restore scroll after selection change */
+  useLayoutEffect(() => {
+    if (historyRef.current) {
+      historyRef.current.scrollTop = scrollPosRef.current;
     }
-  };
+  }, [selectedChatId]);
 
-  // const expandedThemeToggle = onToggleTheme ? (
-  //   <button
-  //     type="button"
-  //     onClick={handleToggleTheme}
-  //     className="group inline-flex items-center gap-2 rounded-full border border-zinc-200 bg-white px-3 py-1.5 text-[10px] font-semibold uppercase tracking-[0.32em] text-zinc-500 transition hover:border-[var(--brand-light)] hover:text-black focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--brand-light)]"
-  //     aria-pressed={isDarkTheme}
-  //   >
-  //     <span className="flex items-center gap-2">
-  //       <span
-  //         className={`relative inline-flex h-6 w-12 items-center rounded-full border transition-all duration-200 ${isDarkTheme
-  //           ? "border-zinc-600 bg-zinc-800"
-  //           : "border-[var(--brand-light)] bg-zinc-100"
-  //           }`}
-  //       >
-  //         <span
-  //           className={`absolute left-1 inline-flex h-4 w-4 items-center justify-center rounded-full bg-white text-[var(--brand)] shadow transition-transform duration-200 ${isDarkTheme ? "translate-x-6 text-zinc-700" : "translate-x-0"
-  //             }`}
-  //         >
-  //           {isDarkTheme ? <IoMoon size={12} /> : <IoSunny size={12} />}
-  //         </span>
-  //       </span>
-  //       <span>{isDarkTheme ? "Dark" : "Light"}</span>
-  //     </span>
-  //   </button>
-  // ) : null;
-
-  // const collapsedThemeToggle = onToggleTheme ? (
-  //   <button
-  //     type="button"
-  //     onClick={handleToggleTheme}
-  //     className={`flex h-10 w-10 items-center justify-center rounded-2xl border border-zinc-200 bg-white text-zinc-600 shadow transition hover:border-[var(--brand-light)] hover:text-[var(--brand)]`}
-  //     aria-pressed={isDarkTheme}
-  //   >
-  //     {isDarkTheme ? <IoMoon size={16} /> : <IoSunny size={16} />}
-  //     <span className="sr-only">Toggle theme</span>
-  //   </button>
-  // ) : null;
+  /* ---------------- handlers ---------------- */
 
   const handleNavigate = (item) => {
-    const targetId = item.thread_id;
-    if (!targetId) {
-      return;
-    }
-    navigate(`/chat/${targetId}`, { state: { assistant_id: item.metadata.graph_id, loadHistory: `load_${Date.now()}` } });
-    setCurrentId(targetId);
+    const targetId = resolveThreadId(item);
+    if (!targetId) return;
+
+    navigate(`/chat/${targetId}`, {
+      state: {
+        assistant_id: item.metadata?.graph_id,
+        loadHistory: `load_${Date.now()}`,
+      },
+    });
   };
 
   const handleNewChat = () => {
     if (creating) return;
     setCreating(true);
+
     try {
-      if (onStartNewChat) {
-        onStartNewChat();
-      }
-      if (navigate) {
-        navigate("/chat");
-      }
+      onStartNewChat?.();
+      navigate("/chat");
     } finally {
-      // prevent rapid re-trigger; re-enable after short delay
       setTimeout(() => setCreating(false), 600);
     }
   };
+
+  const hasThreads = threads.length > 0;
+
+  /* ---------------- UI ---------------- */
 
   const collapsedContent = (
     <>
       <button
         onClick={handleNewChat}
         disabled={isLoading || creating}
-        className={`flex h-10 w-10 items-center justify-center rounded-2xl bg-gradient-to-br from-[var(--brand)] via-[var(--brand)] to-[var(--brand-dark)] text-white shadow-lg shadow-[0_16px_32px_rgba(242,60,57,0.25)] transition hover:scale-[1.03] hover:shadow-[0_20px_40px_rgba(242,60,57,0.32)] ${isLoading ? "cursor-not-allowed opacity-60" : ""
-          }`}
-        title="Start a new chat"
-        aria-label="Start a new chat"
+        className={`flex h-10 w-10 items-center justify-center rounded-2xl bg-gradient-to-br from-[var(--brand)] to-[var(--brand-dark)] text-white shadow-lg transition ${
+          isLoading ? "cursor-not-allowed opacity-60" : "hover:scale-[1.03]"
+        }`}
       >
         <IoAdd size={16} />
       </button>
-      {/* {collapsedThemeToggle} */}
-      <div className="flex-1 flex flex-col items-center justify-center gap-4 text-[10px] font-medium uppercase tracking-[0.32em] text-zinc-400">
-        <span className="sr-only">History hidden while collapsed</span>
+
+      <div className="flex-1 flex flex-col items-center justify-center gap-4 text-[10px] uppercase tracking-[0.32em] text-zinc-400">
         <div className="h-14 w-px rounded-full bg-zinc-200" />
       </div>
-      <div className="flex items-center justify-center">
-        <div className="flex h-10 w-10 items-center justify-center rounded-full bg-gradient-to-br from-[var(--brand)] via-[var(--brand)] to-[var(--brand-dark)] text-sm font-semibold text-white shadow-lg shadow-[0_18px_32px_rgba(242,60,57,0.3)]">
-          U
-        </div>
+
+      <div className="flex h-10 w-10 items-center justify-center rounded-full bg-gradient-to-br from-[var(--brand)] to-[var(--brand-dark)] text-white">
+        U
       </div>
     </>
   );
@@ -185,41 +156,45 @@ export default function LeftSidebar({
         <button
           onClick={handleNewChat}
           disabled={isLoading || creating}
-          className={`flex flex-1 items-center justify-center gap-2 rounded-2xl bg-gradient-to-r from-[var(--brand)] via-[var(--brand)] to-[var(--brand-dark)] py-2 text-sm font-semibold text-white shadow-lg shadow-[0_16px_32px_rgba(242,60,57,0.25)] transition hover:scale-[1.02] hover:shadow-[0_20px_40px_rgba(242,60,57,0.32)] ${isLoading ? "cursor-not-allowed opacity-60" : ""
-            }`}
+          className={`flex flex-1 items-center justify-center gap-2 rounded-2xl bg-gradient-to-r from-[var(--brand)] to-[var(--brand-dark)] py-2 text-sm font-semibold text-white shadow-lg transition ${
+            isLoading ? "cursor-not-allowed opacity-60" : "hover:scale-[1.02]"
+          }`}
         >
           <IoAdd size={16} /> New
         </button>
-        {/* {expandedThemeToggle} */}
       </div>
 
       <div className="flex flex-1 flex-col overflow-hidden">
         <h2 className="text-[11px] font-semibold uppercase tracking-[0.4em] text-zinc-500">
           History
         </h2>
-        <div className="mt-3 flex flex-1 flex-col gap-2 overflow-y-auto pr-1 text-sm">
+
+        <div
+          ref={historyRef}
+          className="mt-3 flex flex-1 flex-col gap-2 overflow-y-auto pr-1 text-sm"
+        >
           {!hasThreads ? (
             <p className="text-xs text-zinc-500/90">No conversations yet</p>
           ) : (
             threads.map((item) => {
-              const rawId = resolveThreadId(item);
-              const normalizedId = rawId !== null && rawId !== undefined ? String(rawId) : null;
-              const key = normalizedId ?? resolveThreadLabel(item);
-              const label = item.metadata.thread_name;
-              const isSelected =
-                threadSelectedId && normalizedId === threadSelectedId;
-              const isNavigable = Boolean(normalizedId);
+              const id = resolveThreadId(item);
+              if (!id) return null;
+
+              const normalizedId = String(id);
+              const isSelected = normalizedId === selectedChatId;
+
               return (
                 <button
-                  key={key}
+                  key={normalizedId} /* ✅ stable key */
                   type="button"
                   onClick={() => handleNavigate(item)}
-                  className={`rounded-2xl border px-3 py-2 text-left transition-all duration-200 ${isSelected ? "border-[var(--brand)] bg-[var(--brand-lighter)] text-black shadow-[0_6px_18px_rgba(242,60,57,0.16)]"
-                    : "border-transparent bg-zinc-50 text-zinc-600 hover:border-[var(--brand-light)] hover:bg-[var(--brand-lighter)] hover:text-black"
-                    } ${isNavigable ? "" : "cursor-default opacity-60"}`}
-                  disabled={!isNavigable}
+                  className={`rounded-2xl border px-3 py-2 text-left transition-all ${
+                    isSelected
+                      ? "border-[var(--brand)] bg-[var(--brand-lighter)] text-black shadow"
+                      : "border-transparent bg-zinc-50 text-zinc-600 hover:bg-[var(--brand-lighter)] hover:text-black"
+                  }`}
                 >
-                  {label}
+                  {resolveThreadLabel(item)}
                 </button>
               );
             })
@@ -227,12 +202,12 @@ export default function LeftSidebar({
         </div>
       </div>
 
-      <div className="mt-auto flex items-center gap-3 rounded-2xl border border-zinc-200 bg-zinc-50 px-3 py-2 text-sm">
-        <div className="flex h-9 w-9 items-center justify-center rounded-full bg-gradient-to-br from-[var(--brand)] via-[var(--brand)] to-[var(--brand-dark)] text-white shadow-[0_18px_32px_rgba(242,60,57,0.3)]">
+      <div className="mt-auto flex items-center gap-3 rounded-2xl border bg-zinc-50 px-3 py-2 text-sm">
+        <div className="flex h-9 w-9 items-center justify-center rounded-full bg-gradient-to-br from-[var(--brand)] to-[var(--brand-dark)] text-white">
           U
         </div>
         <div>
-          <p className="text-sm font-semibold text-black">You</p>
+          <p className="font-semibold text-black">You</p>
           <p className="text-xs text-zinc-500">Workspace owner</p>
         </div>
       </div>
@@ -240,24 +215,32 @@ export default function LeftSidebar({
   );
 
   return (
-    <div key={refreshKey}
-      className={`relative flex h-[81%] transition-all duration-300 ease-in-out ${isCollapsed ? "w-16" : "w-64"
-        }`}
+    <div
+      className={`relative flex h-[81%] transition-all duration-300 ${
+        isCollapsed ? "w-16" : "w-64"
+      }`}
     >
       <aside
-        className={`flex h-full w-full flex-col rounded-3xl border border-zinc-200 bg-white/85 shadow-[0_16px_40px_rgba(17,17,17,0.08)] backdrop-blur-md transition-all duration-300 ease-in-out ${isCollapsed ? "items-center gap-6 px-3 py-4" : "gap-4 p-5"
-          }`}
-        aria-hidden={false}
+        className={`flex h-full w-full flex-col rounded-3xl border bg-white/85 shadow backdrop-blur-md transition-all ${
+          isCollapsed ? "items-center gap-6 px-3 py-4" : "gap-4 p-5"
+        }`}
       >
         {isCollapsed ? collapsedContent : expandedContent}
       </aside>
 
       <button
         onClick={onToggleCollapse}
-        className={`absolute z-10 flex h-9 w-9 items-center justify-center rounded-full border border-zinc-200 bg-white text-zinc-600 shadow-sm transform transition duration-300 ease-in-out hover:border-[var(--brand-light)] hover:text-[var(--brand)] ${isCollapsed ? "top-1/2 right-[-18px] -translate-y-1/2" : "top-4 -right-4"}`}
-        aria-label={isCollapsed ? "Expand left panel" : "Collapse left panel"}
+        className={`absolute z-10 flex h-9 w-9 items-center justify-center rounded-full border bg-white shadow transition ${
+          isCollapsed
+            ? "top-1/2 right-[-18px] -translate-y-1/2"
+            : "top-4 -right-4"
+        }`}
       >
-        {isCollapsed ? <IoChevronForward size={14} /> : <IoChevronBack size={14} />}
+        {isCollapsed ? (
+          <IoChevronForward size={14} />
+        ) : (
+          <IoChevronBack size={14} />
+        )}
       </button>
     </div>
   );

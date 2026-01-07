@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useEffect } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from 'remark-gfm';
 import { IoChevronBack, IoChevronForward } from "react-icons/io5";
@@ -75,38 +75,68 @@ export default function RightSidebar({
   isTransitioning = false,
   liveDemoMessages = [],
 }) {
-  const markdownComponents = React.useMemo(
-    () => ({
-      a: ({ node, ...props }) => (
-        <a
+  const markdownComponents = {
+    /* ---------- HEADINGS ---------- */
+    h1: ({ node, ...props }) => (
+      <h1 className="text-2xl font-bold mb-4 mt-6 text-zinc-900" {...props} />
+    ),
+    h2: ({ node, ...props }) => (
+      <h2 className="text-xl font-semibold mb-3 mt-5 text-zinc-900 border-b pb-1" {...props} />
+    ),
+    h3: ({ node, ...props }) => (
+      <h3 className="text-lg font-semibold mb-2 mt-4 text-zinc-800" {...props} />
+    ),
+
+    /* ---------- TEXT ---------- */
+    p: ({ node, ...props }) => (
+      <p className="mb-3 last:mb-0 leading-relaxed text-zinc-700" {...props} />
+    ),
+    strong: ({ node, ...props }) => (
+      <strong className="font-semibold text-zinc-900" {...props} />
+    ),
+
+    /* ---------- LISTS ---------- */
+    ul: ({ node, ...props }) => (
+      <ul className="mb-3 ml-5 list-disc space-y-1" {...props} />
+    ),
+    ol: ({ node, ...props }) => (
+      <ol className="mb-3 ml-5 list-decimal space-y-1" {...props} />
+    ),
+    li: ({ node, ...props }) => (
+      <li className="pl-1 text-zinc-700" {...props} />
+    ),
+
+    /* ---------- TABLES (FIX) ---------- */
+    table: ({ node, ...props }) => (
+      <div className="overflow-x-auto my-4">
+        <table
+          className="min-w-full border border-zinc-200 rounded-lg border-collapse text-sm"
           {...props}
-          className="font-semibold text-[var(--brand)] underline decoration-[var(--brand)] decoration-2 underline-offset-2"
-          target="_blank"
-          rel="noreferrer"
         />
-      ),
-      code({ inline, className, children, ...props }) {
-        if (inline) {
-          return (
-            <code
-              className={`rounded bg-black/10 px-1 py-[0.1rem] font-mono text-[0.85em] ${className ?? ""}`}
-              {...props}
-            >
-              {children}
-            </code>
-          );
-        }
-        return (
-          <pre className="overflow-x-auto rounded-xl border border-zinc-200 bg-zinc-950/95 p-3 text-zinc-100 shadow-inner">
-            <code className="font-mono text-[0.85em]" {...props}>
-              {children}
-            </code>
-          </pre>
-        );
-      },
-    }),
-    [],
-  );
+      </div>
+    ),
+    thead: ({ node, ...props }) => (
+      <thead className="bg-zinc-100" {...props} />
+    ),
+    tbody: ({ node, ...props }) => (
+      <tbody className="divide-y divide-zinc-200" {...props} />
+    ),
+    tr: ({ node, ...props }) => (
+      <tr className="hover:bg-zinc-50" {...props} />
+    ),
+    th: ({ node, ...props }) => (
+      <th
+        className="border border-zinc-200 px-3 py-2 text-left font-semibold text-zinc-900"
+        {...props}
+      />
+    ),
+    td: ({ node, ...props }) => (
+      <td
+        className="border border-zinc-200 px-3 py-2 text-zinc-700 align-top"
+        {...props}
+      />
+    ),
+  };
 
   const prevToolKeysRef = React.useRef(new Set());
   const [recentToolKeys, setRecentToolKeys] = React.useState([]);
@@ -145,17 +175,18 @@ export default function RightSidebar({
         return acc;
       }
       // if(title?.toLowerCase() == 'write_todos'){
-        acc.push({
-          key,
-          title,
-          body,
-        });
-        return acc;
+      acc.push({
+        key,
+        title,
+        body,
+      });
+      return acc;
       // }
     }, []);
   }, [toolOutputs]);
 
   const demoMessages = React.useMemo(() => {
+    console.log(liveDemoMessages);
     if (!Array.isArray(liveDemoMessages)) {
       return [];
     }
@@ -166,7 +197,7 @@ export default function RightSidebar({
           return null;
         }
         const text =
-          typeof message.text === "string" ? message.text.trim() : "";
+          typeof message.content === "string" ? message.content.trim() : "";
         if (!text) {
           return null;
         }
@@ -197,8 +228,11 @@ export default function RightSidebar({
       .filter(Boolean);
   }, [liveDemoMessages]);
 
+
+  useEffect(() => { console.log(demoMessages) }, [liveDemoMessages?.length])
+
   const hasToolOutputs = toolCards?.length > 0;
-  const hasDemoMessages = demoMessages.length > 0;
+  const hasDemoMessages = true;
   const hasSources = Array.isArray(sources) && sources.length > 0;
   const demoStepCount = Array.isArray(liveDemoSteps) ? liveDemoSteps.length : 0;
   const sourceCount = hasSources ? sources.length : 0;
@@ -222,12 +256,12 @@ export default function RightSidebar({
         : 0;
   const shouldRender = showDemoSteps || hasToolOutputs || hasSources;
   const headerLabel = React.useMemo(() => {
-    // if (showDemoSteps) {
-    //   if (hasDemoMessages) {
-    //     return "Live Demo Conversation";
-    //   }
-    //   return "Streaming Steps";
-    // }
+    if (showDemoSteps) {
+      if (hasDemoMessages) {
+        return "Live Demo Conversation";
+      }
+      return "Streaming Steps";
+    }
     if (hasToolOutputs) {
       return "Tool Output";
     }
@@ -278,7 +312,7 @@ export default function RightSidebar({
               </span>
             </div>
           )}
-          {liveDemoSteps.map((step, index) => (
+          {/* {liveDemoSteps.map((step, index) => (
             <div
               key={step}
               className="flex items-start gap-3 rounded-2xl border border-zinc-200 bg-white px-3 py-2 text-zinc-600 shadow-inner shadow-orange-100/40"
@@ -288,8 +322,7 @@ export default function RightSidebar({
               </span>
               <span>{step}</span>
             </div>
-          ))}
-
+          ))} */}
           {hasDemoMessages && (
             <div className="mt-3 flex flex-col gap-2 text-[11px]">
               <div className="text-[10px] font-semibold uppercase tracking-[0.3em] text-zinc-500">
