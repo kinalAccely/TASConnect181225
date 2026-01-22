@@ -51,6 +51,7 @@ export default function LeftSidebar({
   /* 🔒 scroll preservation */
   const historyRef = useRef(null);
   const scrollPosRef = useRef(0);
+  const threadRefs = useRef(new Map());
 
   /* ---------------- effects ---------------- */
 
@@ -93,8 +94,33 @@ export default function LeftSidebar({
 
   /* restore scroll after selection change */
   useLayoutEffect(() => {
-    if (historyRef.current) {
-      historyRef.current.scrollTop = scrollPosRef.current;
+    const listEl = historyRef.current;
+    if (!listEl) return;
+
+    const normalizedId = selectedChatId ? String(selectedChatId) : undefined;
+    const selectedEl = normalizedId
+      ? threadRefs.current.get(normalizedId)
+      : undefined;
+
+    if (!selectedEl) {
+      listEl.scrollTop = scrollPosRef.current;
+      return;
+    }
+
+    const listTop = listEl.scrollTop;
+    const listBottom = listTop + listEl.clientHeight;
+    const nodeTop = selectedEl.offsetTop;
+    const nodeBottom = nodeTop + selectedEl.offsetHeight;
+
+    if (nodeTop < listTop) {
+      listEl.scrollTo({ top: nodeTop, behavior: "smooth" });
+    } else if (nodeBottom > listBottom) {
+      listEl.scrollTo({
+        top: nodeBottom - listEl.clientHeight,
+        behavior: "smooth",
+      });
+    } else {
+      listEl.scrollTop = scrollPosRef.current;
     }
   }, [selectedChatId]);
 
@@ -188,6 +214,13 @@ export default function LeftSidebar({
                   key={normalizedId} /* ✅ stable key */
                   type="button"
                   onClick={() => handleNavigate(item)}
+                  ref={(node) => {
+                    if (!node) {
+                      threadRefs.current.delete(normalizedId);
+                      return;
+                    }
+                    threadRefs.current.set(normalizedId, node);
+                  }}
                   className={`rounded-2xl border px-3 py-2 text-left transition-all ${
                     isSelected
                       ? "border-[var(--brand)] bg-[var(--brand-lighter)] text-black shadow"
