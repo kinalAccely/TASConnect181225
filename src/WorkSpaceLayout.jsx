@@ -357,13 +357,16 @@ export default function workSpaceLayout() {
 
           if (!msg) continue;
           if (msg.type !== "human" && msg.type !== "ai") continue;
-          if (typeof msg.content !== "string") continue;
+          if ((typeof msg.content !== "string") && !Array.isArray(msg.content)) continue;
           if (['training_module_graph', 'agent'].includes(assistantId)) {
+            console.log(msg, msg.content);
+            // if ((typeof msg.content == 'string') ? true : msg.content[0].type == 'text') {
             filteredMessages.push({
               id: msg.id,
               role: msg.type === "human" ? "user" : "assistant",
-              content: msg.content
+              content: typeof msg.content == 'string' ? msg.content : (msg.content?.length > 0 ? msg.content[0].text : '')
             });
+            // }
           }
           else {
             if (msg.type == 'human') {
@@ -383,6 +386,8 @@ export default function workSpaceLayout() {
 
           }
         }
+
+        console.log(filteredMessages);
 
         streamedListRef.current = filteredMessages;
         setLiveDemoThinking(LiveDemoAssistantMessages);
