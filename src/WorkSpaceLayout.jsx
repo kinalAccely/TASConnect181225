@@ -203,7 +203,7 @@ export default function workSpaceLayout() {
           stream_mode: UNIFIED_STREAM_MODES,
           stream_subgraphs: true,
           stream_resumable: true,
-          assistant_id: assistantId,
+          assistant_id: assistantId ? assistantId : 'agent',
         },
         options: { on_disconnect: "cancel" },
 
@@ -225,7 +225,7 @@ export default function workSpaceLayout() {
                 .filter(msg => msg.type === "ai")
                 .forEach(msg => {
                   const idx = streamedDemoListRef.current.findIndex(m => m.id === msg.id);
-                  if (msg.content) {
+                  if (msg.content?.length) {
                     let filterText = msg.content.filter(res => res.type == 'text');
                     if (filterText?.length) {
                       if (idx !== -1) {
@@ -244,24 +244,24 @@ export default function workSpaceLayout() {
                 })
             }
             else {
-              data
-                .filter(msg => msg.type === "AIMessageChunk")
-                .forEach(msg => {
-                  const idx = streamedListRef.current.findIndex(m => m.id === msg.id);
-                  if (msg.content) {
-                    if (idx !== -1) {
-                      streamedListRef.current[idx].content += msg.content;
-                    }
-                    else {
-                      streamedListRef.current.push({
-                        id: msg.id,
-                        role: "assistant",
-                        content: msg.content,
-                        langgraph_node: data[1].langgraph_node // ✅ stored here
-                      });
-                    }
+              let aiMessages = data.filter(msg => msg.type === "AIMessageChunk");
+              console.log(aiMessages);
+              aiMessages.forEach(msg => {
+                const idx = streamedListRef.current.findIndex(m => m.id === msg.id);
+                if (msg.content?.length && msg.content[0].type == 'text') {
+                  if (idx !== -1) {
+                    streamedListRef.current[idx].content += msg.content[0].text;
                   }
-                });
+                  else {
+                    streamedListRef.current.push({
+                      id: msg.id,
+                      role: "assistant",
+                      content: msg.content[0].text,
+                      langgraph_node: data[1].langgraph_node // ✅ stored here
+                    });
+                  }
+                }
+              });
             }
 
             console.log(streamedDemoListRef);
@@ -412,7 +412,6 @@ export default function workSpaceLayout() {
     setReloadThread(true);
     setStreamSandboxUrl('');
     setThreadChatId('');
-    setAssistantId('');
     setLiveDemoThinking([]);
     setShowDemoSteps(false);
     setIsRightCollapsed(true);

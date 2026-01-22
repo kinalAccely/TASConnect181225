@@ -289,7 +289,7 @@ export default function ChatSection({
   }, [input]);
 
   const showSlashMenu = isStreamNewChat && newStreamingList.length === 0 && input.startsWith("/");
-  const [scrollBottom , setScrollBottom]  = useState('');
+  const [scrollBottom, setScrollBottom] = useState('');
   useEffect(() => {
     const scrollToBottom = () => {
       if (chatBodyRef.current) {
@@ -300,7 +300,7 @@ export default function ChatSection({
       }
     };
     scrollToBottom();
-  }, [newStreamingList , scrollBottom , ])
+  }, [newStreamingList, scrollBottom,])
 
   const handleSelectModule = (module) => {
     setActiveModule(module);
@@ -527,7 +527,6 @@ export default function ChatSection({
                           transition-opacity duration-200"
                     />)
                     }
-
                     <ReactMarkdown
                       remarkPlugins={[remarkGfm]}
                       components={markdownComponents}
