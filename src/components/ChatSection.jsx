@@ -37,6 +37,7 @@ export default function ChatSection({
   showScrollButton
 }) {
   const lastRenderedSandboxUrlRef = useRef(null);
+  const isAtBottomRef = useRef(true);
   const shouldRenderSandbox = sandboxUrl && sandboxUrl !== lastRenderedSandboxUrlRef.current;
   const [sandboxUrlLink, setSandBoxUrl] = useState('');
   const location = useLocation();
@@ -290,17 +291,35 @@ export default function ChatSection({
 
   const showSlashMenu = isStreamNewChat && newStreamingList.length === 0 && input.startsWith("/");
   const [scrollBottom, setScrollBottom] = useState('');
+
+  // Auto-scroll only if user was already at the bottom
   useEffect(() => {
-    const scrollToBottom = () => {
-      if (chatBodyRef.current) {
-        chatBodyRef.current.scrollTo({
-          top: chatBodyRef.current.scrollHeight,
-          behavior: 'smooth'
-        });
-      }
-    };
-    scrollToBottom();
-  }, [newStreamingList, scrollBottom,])
+    if (chatBodyRef.current && isAtBottomRef.current) {
+      chatBodyRef.current.scrollTo({
+        top: chatBodyRef.current.scrollHeight,
+        behavior: 'smooth'
+      });
+    }
+  }, [newStreamingList]);
+
+  // Force scroll when scrollBottom state changes (button click)
+  useEffect(() => {
+    if (chatBodyRef.current && scrollBottom) {
+      chatBodyRef.current.scrollTo({
+        top: chatBodyRef.current.scrollHeight,
+        behavior: 'smooth'
+      });
+      isAtBottomRef.current = true;
+    }
+  }, [scrollBottom]);
+
+  const handleScroll = () => {
+    if (chatBodyRef.current) {
+      const { scrollTop, scrollHeight, clientHeight } = chatBodyRef.current;
+      const isBottom = scrollHeight - scrollTop - clientHeight < 100;
+      isAtBottomRef.current = isBottom;
+    }
+  };
 
   const handleSelectModule = (module) => {
     setActiveModule(module);
@@ -396,6 +415,7 @@ export default function ChatSection({
 
         <div
           ref={chatBodyRef}
+          onScroll={handleScroll}
           className="flex-1 space-y-6 overflow-y-auto px-6 py-6 scroll-smooth"
         >
           {isStreamNewChat && newStreamingList.length === 0 && !isLoading && (

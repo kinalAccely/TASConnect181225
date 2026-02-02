@@ -27,7 +27,7 @@ const ASSISTANT_SUGGESTIONS = [
 const UNIFIED_STREAM_MODES = ["messages", "modules", "metadata", "custom", "updates", "messages-tuple", "values"];
 const MODULE_STREAM_RULES = {
   agent: {
-    acceptEvents: ["updates", "result", "router"],
+    acceptEvents: ["result", "router"],
     hideIntermediateAssistants: true,
   },
 
@@ -217,6 +217,15 @@ export default function workSpaceLayout() {
           if (!["messages", "updates"].includes(event)) return;
 
           if (event === 'messages' || event.includes('messages')) {
+            data.forEach((msg) => {
+              if (msg.tool_calls && msg.tool_calls.length > 0) {
+                msg.tool_calls.forEach((tool) => {
+                  if (tool.name === "AssignerOutput" && (tool.args?.all_done === true || tool.input?.all_done === true)) {
+                    setStreamSandboxUrl("");
+                  }
+                });
+              }
+            });
 
             hasResultRef.current = MODULE_STREAM_RULES[assistantId].acceptEvents?.length === 0 || MODULE_STREAM_RULES[assistantId].acceptEvents?.includes(data[1].langgraph_node) || assistantId == 'live_demo'
             if (!hasResultRef.current) return;
