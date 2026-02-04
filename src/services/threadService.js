@@ -1,6 +1,7 @@
 import { forkJoin, of, throwError } from "rxjs";
 import { fromFetch } from "rxjs/fetch";
 import { switchMap, catchError } from "rxjs/operators";
+import { getAccessToken } from "../utils/tokenManager";
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL;
 const DEFAULT_ASSISTANT_ID = import.meta.env.VITE_ASSISTANT_ID ?? "agent";
@@ -31,7 +32,12 @@ export async function fetchThreads() {
     return [];
   }
 
-  const response = await fetch(`${normalizeBaseUrl(API_BASE_URL)}/threads`);
+  const token = getAccessToken();
+  const response = await fetch(`${normalizeBaseUrl(API_BASE_URL)}/threads`, {
+    headers: {
+      'Authorization': `Bearer ${token}`
+    }
+  });
 
   if (!response.ok) {
     throw new Error(
@@ -83,11 +89,13 @@ export async function getStreamMessages({
   onError,
   signal,
 }) {
+  const token = getAccessToken();
   const res = await fetch(API_BASE_URL + url, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
       Accept: "text/event-stream",
+      'Authorization': `Bearer ${token}`
     },
     body: JSON.stringify(body),
     signal,
@@ -153,9 +161,13 @@ function parseSSE(buffer, onEvent) {
 /* -------------------- Thread Actions -------------------- */
 
 export async function createThread(title, assistantId) {
+  const token = getAccessToken();
   const response = await fetch(`${normalizeBaseUrl(API_BASE_URL)}/threads`, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: {
+      "Content-Type": "application/json",
+      'Authorization': `Bearer ${token}`
+    },
     body: JSON.stringify({
       metadata: {
         thread_name: title || "New Thread",
@@ -173,11 +185,65 @@ export async function createThread(title, assistantId) {
   return response.json();
 }
 
+export async function deleteThread(threadId) {
+  if (!threadId) return;
+  const token = getAccessToken();
+  const response = await fetch(`${normalizeBaseUrl(API_BASE_URL)}/threads/${threadId}`, {
+    method: "DELETE",
+    headers: {
+      'Authorization': `Bearer ${token}`
+    }
+  });
+
+  if (!response.ok) {
+    throw new Error(`Failed to delete thread: ${response.status}`);
+  }
+  return true;
+}
+
+export async function updateThread(threadId, metadata) {
+  if (!threadId) return;
+  const token = getAccessToken();
+  // Attempt to update thread metadata via PATCH if supported
+  const response = await fetch(`${normalizeBaseUrl(API_BASE_URL)}/threads/${threadId}`, {
+    method: "PATCH",
+    headers: {
+      "Content-Type": "application/json",
+      'Authorization': `Bearer ${token}`
+    },
+    body: JSON.stringify({ metadata })
+  });
+
+  if (!response.ok) {
+    // Some versions might use POST for update
+    if (response.status === 405) {
+      const postResponse = await fetch(`${normalizeBaseUrl(API_BASE_URL)}/threads/${threadId}`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({ metadata })
+      });
+      if (!postResponse.ok) throw new Error("Update failed");
+      return postResponse.json();
+    }
+    throw new Error(`Failed to update thread: ${response.status}`);
+  }
+  return response.json();
+}
+
 export async function threadHistory(threadId) {
   if (!threadId) return [];
 
+  const token = getAccessToken();
   const response = await fetch(
-    `${normalizeBaseUrl(API_BASE_URL)}/threads/${threadId}/history`
+    `${normalizeBaseUrl(API_BASE_URL)}/threads/${threadId}/history`,
+    {
+      headers: {
+        'Authorization': `Bearer ${token}`
+      }
+    }
   );
 
   if (!response.ok) {
@@ -198,12 +264,17 @@ export function stopStream(thread_id, run_id, containerId) {
 
   const baseUrl = normalizeBaseUrl(API_BASE_URL);
 
+  const token = getAccessToken();
+
   // 🔹 Cancel run (independent)
   const cancelRun$ = fromFetch(
     `${baseUrl}/threads/${thread_id}/runs/${run_id}/cancel?wait=0&action=cancel`,
     {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: {
+        "Content-Type": "application/json",
+        'Authorization': `Bearer ${token}`
+      },
     }
   ).pipe(
     switchMap(res => res.ok ? res.json() : Promise.reject(res)),
@@ -223,7 +294,10 @@ export function stopStream(thread_id, run_id, containerId) {
   const cleanup$ = containerId
     ? fromFetch(`${baseUrl}/cleanup`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: {
+        "Content-Type": "application/json",
+        'Authorization': `Bearer ${token}`
+      },
       body: JSON.stringify({ container_id: containerId }),
     }).pipe(
       switchMap(res => res.ok ? res.json() : Promise.reject(res)),
@@ -259,13 +333,17 @@ export function cancelRun(thread_id, run_id) {
     });
   }
 
+  const token = getAccessToken();
   const baseUrl = normalizeBaseUrl(API_BASE_URL);
 
   return fromFetch(
     `${baseUrl}/threads/${thread_id}/runs/${run_id}/cancel?wait=0&action=cancel`,
     {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: {
+        "Content-Type": "application/json",
+        'Authorization': `Bearer ${token}`
+      },
     }
   ).pipe(
     switchMap(res =>
@@ -295,11 +373,15 @@ export function cleanupContainer(containerId) {
     });
   }
 
+  const token = getAccessToken();
   const baseUrl = normalizeBaseUrl(API_BASE_URL);
 
   return fromFetch(`${baseUrl}/cleanup`, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: {
+      "Content-Type": "application/json",
+      'Authorization': `Bearer ${token}`
+    },
     body: JSON.stringify({ container_id: containerId }),
   }).pipe(
     switchMap(res =>
