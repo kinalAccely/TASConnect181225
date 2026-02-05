@@ -3,6 +3,7 @@ import ReactMarkdown from "react-markdown";
 import remarkGfm from 'remark-gfm';
 import { IoChevronBack, IoChevronForward } from "react-icons/io5";
 import { FileText } from "lucide-react";
+import { useAuth } from "../contexts/AuthContext";
 
 const resolveToolTitle = (tool, fallbackIndex) => {
   if (!tool || typeof tool !== "object") {
@@ -75,6 +76,7 @@ export default function RightSidebar({
   isTransitioning = false,
   liveDemoMessages = [],
 }) {
+  const { user } = useAuth();
   const markdownComponents = {
     /* ---------- HEADINGS ---------- */
     h1: ({ node, ...props }) => (
@@ -206,7 +208,7 @@ export default function RightSidebar({
         const normalizedRole = role.toLowerCase();
         const isUser = normalizedRole === "user";
         const roleLabel = isUser
-          ? "You"
+          ? (user?.display_name || user?.username || "You")
           : normalizedRole === "assistant"
             ? "Assistant"
             : normalizedRole === "system"
