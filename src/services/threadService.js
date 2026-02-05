@@ -1,6 +1,7 @@
 import { forkJoin, of, throwError } from "rxjs";
 import { fromFetch } from "rxjs/fetch";
 import { switchMap, catchError } from "rxjs/operators";
+import { fetchWithAuth, getAuthHeaders, getAuthToken } from "./apiClient";
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL;
 const DEFAULT_ASSISTANT_ID = import.meta.env.VITE_ASSISTANT_ID ?? "agent";
@@ -31,7 +32,7 @@ export async function fetchThreads() {
     return [];
   }
 
-  const response = await fetch(`${normalizeBaseUrl(API_BASE_URL)}/threads`);
+  const response = await fetchWithAuth("/threads");
 
   if (!response.ok) {
     throw new Error(
@@ -83,7 +84,7 @@ export async function getStreamMessages({
   onError,
   signal,
 }) {
-  const res = await fetch(API_BASE_URL + url, {
+  const res = await fetchWithAuth(url, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
@@ -153,7 +154,7 @@ function parseSSE(buffer, onEvent) {
 /* -------------------- Thread Actions -------------------- */
 
 export async function createThread(title, assistantId) {
-  const response = await fetch(`${normalizeBaseUrl(API_BASE_URL)}/threads`, {
+  const response = await fetchWithAuth("/threads", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
@@ -176,9 +177,7 @@ export async function createThread(title, assistantId) {
 export async function threadHistory(threadId) {
   if (!threadId) return [];
 
-  const response = await fetch(
-    `${normalizeBaseUrl(API_BASE_URL)}/threads/${threadId}/history`
-  );
+  const response = await fetchWithAuth(`/threads/${threadId}/history`);
 
   if (!response.ok) {
     throw new Error(
@@ -197,13 +196,17 @@ export function stopStream(thread_id, run_id, containerId) {
   }
 
   const baseUrl = normalizeBaseUrl(API_BASE_URL);
+  const headers = {
+    "Content-Type": "application/json",
+    ...getAuthHeaders()
+  };
 
   // 🔹 Cancel run (independent)
   const cancelRun$ = fromFetch(
     `${baseUrl}/threads/${thread_id}/runs/${run_id}/cancel?wait=0&action=cancel`,
     {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers,
     }
   ).pipe(
     switchMap(res => res.ok ? res.json() : Promise.reject(res)),
@@ -223,7 +226,7 @@ export function stopStream(thread_id, run_id, containerId) {
   const cleanup$ = containerId
     ? fromFetch(`${baseUrl}/cleanup`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers,
       body: JSON.stringify({ container_id: containerId }),
     }).pipe(
       switchMap(res => res.ok ? res.json() : Promise.reject(res)),
@@ -260,12 +263,16 @@ export function cancelRun(thread_id, run_id) {
   }
 
   const baseUrl = normalizeBaseUrl(API_BASE_URL);
+  const headers = {
+    "Content-Type": "application/json",
+    ...getAuthHeaders()
+  };
 
   return fromFetch(
     `${baseUrl}/threads/${thread_id}/runs/${run_id}/cancel?wait=0&action=cancel`,
     {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers,
     }
   ).pipe(
     switchMap(res =>
@@ -296,10 +303,14 @@ export function cleanupContainer(containerId) {
   }
 
   const baseUrl = normalizeBaseUrl(API_BASE_URL);
+  const headers = {
+    "Content-Type": "application/json",
+    ...getAuthHeaders()
+  };
 
   return fromFetch(`${baseUrl}/cleanup`, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers,
     body: JSON.stringify({ container_id: containerId }),
   }).pipe(
     switchMap(res =>
