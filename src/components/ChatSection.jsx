@@ -33,8 +33,7 @@ export default function ChatSection({
   onAssistantSuggestionSelect,
   threadId,
   assistantId: propsAssistantId,
-  currentAssistantId,
-  showScrollButton
+  currentAssistantId
 }) {
   const lastRenderedSandboxUrlRef = useRef(null);
   const isAtBottomRef = useRef(true);
@@ -291,6 +290,7 @@ export default function ChatSection({
 
   const showSlashMenu = isStreamNewChat && newStreamingList.length === 0 && input.startsWith("/");
   const [scrollBottom, setScrollBottom] = useState('');
+  const [showScrollButton, setShowScrollButton] = useState(false);
 
   // Auto-scroll only if user was already at the bottom
   useEffect(() => {
@@ -302,6 +302,18 @@ export default function ChatSection({
     }
   }, [newStreamingList]);
 
+  // Reset scroll state when thread changes
+  useEffect(() => {
+    isAtBottomRef.current = true;
+    setShowScrollButton(false);
+    if (chatBodyRef.current) {
+      chatBodyRef.current.scrollTo({
+        top: chatBodyRef.current.scrollHeight,
+        behavior: 'smooth'
+      });
+    }
+  }, [threadId, isStreamNewChat]);
+
   // Force scroll when scrollBottom state changes (button click)
   useEffect(() => {
     if (chatBodyRef.current && scrollBottom) {
@@ -310,6 +322,7 @@ export default function ChatSection({
         behavior: 'smooth'
       });
       isAtBottomRef.current = true;
+      setShowScrollButton(false);
     }
   }, [scrollBottom]);
 
@@ -318,6 +331,7 @@ export default function ChatSection({
       const { scrollTop, scrollHeight, clientHeight } = chatBodyRef.current;
       const isBottom = scrollHeight - scrollTop - clientHeight < 100;
       isAtBottomRef.current = isBottom;
+      setShowScrollButton(!isBottom);
     }
   };
 
@@ -401,7 +415,7 @@ export default function ChatSection({
 
       {showScrollButton && (
         <button
-          onClick={setScrollBottom(`scroll${Date.now()}`)}
+          onClick={() => setScrollBottom(`scroll${Date.now()}`)}
           className="absolute bottom-28 right-8 z-50 flex items-center justify-center
                    bg-white text-[var(--brand)] rounded-full p-2 shadow-lg border
                    border-zinc-200 hover:bg-zinc-50 transition-all animate-bounce"

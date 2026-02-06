@@ -27,7 +27,7 @@ const ASSISTANT_SUGGESTIONS = [
 const UNIFIED_STREAM_MODES = ["messages", "modules", "metadata", "custom", "updates", "messages-tuple", "values"];
 const MODULE_STREAM_RULES = {
   agent: {
-    acceptEvents: ["result", "router"],
+    acceptEvents: ["result", "router", "aggregator"],
     hideIntermediateAssistants: true,
   },
 
@@ -69,7 +69,7 @@ export default function workSpaceLayout() {
   const [runId, setRunId] = useState('');
   const [liveDemoThinking, setLiveDemoThinking] = useState([]);
   const [reloadThread, setReloadThread] = useState('')
-  const [showScrollButton, setShowScrollButton] = useState(false);
+
   const [containerId, setContainerId] = useState('');
   const [showDemoSteps, setShowDemoSteps] = useState('');
 
@@ -85,6 +85,7 @@ export default function workSpaceLayout() {
 
   React.useEffect(() => {
     if (threadChatId) {
+      setThreadChatId(threadChatId);
       setShowAssistantChooser(false);
     }
   }, [threadChatId]);
@@ -166,9 +167,10 @@ export default function workSpaceLayout() {
   useEffect(() => {
     setThreadChatId(threadChatId);
   }, [threadChatId])
+
   useEffect(() => {
     setLoadHistoryToggle(`load_${Date.now()}`);
-  }, [loadHistory])
+  }, [loadHistory, threadChatId])
 
   useEffect(() => {
     if (state_assistant_id) {
@@ -177,7 +179,7 @@ export default function workSpaceLayout() {
   }, [state_assistant_id]);
 
   useEffect(() => {
-    if (!threadChatId || searchedText.length === 0) return;
+    if (!selectedThreadChatId || searchedText.length === 0) return;
     setRunId('');
     setInput('');
     setLoadHistoryToggle("");
@@ -194,7 +196,7 @@ export default function workSpaceLayout() {
 
     setTimeout(() => {
       getStreamMessages({
-        url: `/threads/${threadChatId}/runs/stream`,
+        url: `/threads/${selectedThreadChatId}/runs/stream`,
         body: {
           input: {
             messages: [{ role: "user", content: searchedText }]
@@ -343,13 +345,13 @@ export default function workSpaceLayout() {
   }, [initialMessage]);
 
   useEffect(() => {
-    if (!threadChatId) return;
+    if (!selectedThreadChatId) return;
     let cancelled = false;
     setIsRightCollapsed(true);
     setShowDemoSteps(false);
     setLiveDemoThinking([]);
     if (loadHistoryToggle.includes("load")) {
-      threadHistory(threadChatId).then((response) => {
+      threadHistory(selectedThreadChatId).then((response) => {
         if (cancelled) return;
         setInput('');
         setSearchedText('');
@@ -499,7 +501,6 @@ export default function workSpaceLayout() {
 
           <ChatSection
             theme='light'
-            showScrollButton={showScrollButton}
             newStreamingList={newStreamingList}
             chatBodyRef={chatBodyRef}
             input={input}

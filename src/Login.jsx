@@ -18,9 +18,7 @@ export default function Login() {
             const data = await login(email, password);
 
             if (data.access_token) {
-                localStorage.setItem('access_token', data.access_token);
-                // Navigate via window location to ensure a full refresh/state reset if needed,
-                // or just standard navigate. Standard navigate is better for SPA.
+                // Tokens are stored by authService
                 navigate('/chat');
             } else {
                 setError('Login failed: No access token received');

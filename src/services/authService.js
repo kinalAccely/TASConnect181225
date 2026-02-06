@@ -153,7 +153,7 @@ export async function refreshAccessToken() {
 
     // Update stored tokens
     if (data.access_token && data.refresh_token) {
-        const rememberMe = !!localStorage.getItem('tas_access_token'); // Check if using localStorage
+        const rememberMe = !!localStorage.getItem('access_token'); // Check if using localStorage
         storeTokens({
             access_token: data.access_token,
             refresh_token: data.refresh_token,
@@ -199,7 +199,7 @@ export async function logout(invalidateAll = false) {
  * @returns {Object|null} User object or null
  */
 export function getCurrentUser() {
-    const userStr = localStorage.getItem('tas_user') || sessionStorage.getItem('tas_user');
+    const userStr = localStorage.getItem('access_token');
     if (!userStr) return null;
 
     try {

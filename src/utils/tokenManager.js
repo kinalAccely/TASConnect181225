@@ -12,12 +12,13 @@ const USER_KEY = 'tas_user';
  * @param {boolean} rememberMe - Whether to use localStorage (true) or sessionStorage (false)
  */
 export function storeTokens({ access_token, refresh_token }, rememberMe = false) {
-  const storage = rememberMe ? localStorage : sessionStorage;
-  
+  const storage = localStorage;
+
   if (access_token) {
     storage.setItem(ACCESS_TOKEN_KEY, access_token);
+    storage.setItem('access_token', access_token); // Duplicate for legacy/external compatibility
   }
-  
+
   if (refresh_token) {
     storage.setItem(REFRESH_TOKEN_KEY, refresh_token);
   }
@@ -29,7 +30,7 @@ export function storeTokens({ access_token, refresh_token }, rememberMe = false)
  * @param {boolean} rememberMe - Whether to use localStorage or sessionStorage
  */
 export function storeUser(user, rememberMe = false) {
-  const storage = rememberMe ? localStorage : sessionStorage;
+  const storage = localStorage;
   storage.setItem(USER_KEY, JSON.stringify(user));
 }
 
@@ -38,7 +39,7 @@ export function storeUser(user, rememberMe = false) {
  * @returns {string|null} Access token or null if not found
  */
 export function getAccessToken() {
-  return localStorage.getItem(ACCESS_TOKEN_KEY) || sessionStorage.getItem(ACCESS_TOKEN_KEY);
+  return localStorage.getItem(ACCESS_TOKEN_KEY);
 }
 
 /**
@@ -46,7 +47,7 @@ export function getAccessToken() {
  * @returns {string|null} Refresh token or null if not found
  */
 export function getRefreshToken() {
-  return localStorage.getItem(REFRESH_TOKEN_KEY) || sessionStorage.getItem(REFRESH_TOKEN_KEY);
+  return localStorage.getItem(REFRESH_TOKEN_KEY);
 }
 
 /**
@@ -54,9 +55,9 @@ export function getRefreshToken() {
  * @returns {Object|null} User object or null if not found
  */
 export function getUser() {
-  const userStr = localStorage.getItem(USER_KEY) || sessionStorage.getItem(USER_KEY);
+  const userStr = localStorage.getItem(USER_KEY);
   if (!userStr) return null;
-  
+
   try {
     return JSON.parse(userStr);
   } catch (error) {
@@ -65,18 +66,12 @@ export function getUser() {
   }
 }
 
-/**
- * Clear all authentication data
- */
 export function clearTokens() {
   // Clear from both storages
   localStorage.removeItem(ACCESS_TOKEN_KEY);
+  localStorage.removeItem('access_token');
   localStorage.removeItem(REFRESH_TOKEN_KEY);
   localStorage.removeItem(USER_KEY);
-  
-  sessionStorage.removeItem(ACCESS_TOKEN_KEY);
-  sessionStorage.removeItem(REFRESH_TOKEN_KEY);
-  sessionStorage.removeItem(USER_KEY);
 }
 
 /**

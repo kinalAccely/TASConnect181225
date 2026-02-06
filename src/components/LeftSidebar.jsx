@@ -45,6 +45,7 @@ export default function LeftSidebar({
   theme = "light",
   onStartNewChat,
   onToggleTheme,
+  loadHistoryToggle,
   onToggleCollapse,
   selectedChatId,
 }) {
@@ -158,6 +159,7 @@ export default function LeftSidebar({
   const handleNavigate = (item) => {
     const targetId = resolveThreadId(item);
     if (!targetId || targetId === selectedChatId) return;
+    loadHistoryToggle?.();
     navigate(`/chat/${targetId}`);
   };
 

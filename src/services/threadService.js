@@ -1,7 +1,7 @@
 import { forkJoin, of, throwError } from "rxjs";
 import { fromFetch } from "rxjs/fetch";
-import { switchMap, catchError } from "rxjs/operators";
-import { fetchWithAuth, getAuthHeaders, getAuthToken } from "./apiClient";
+import { switchMap, catchError, tap } from "rxjs/operators";
+import { fetchWithAuth, getAuthHeaders, getAuthToken, handleAuthError } from "./apiClient";
 import { getAccessToken } from "../utils/tokenManager";
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL;
@@ -34,11 +34,12 @@ export async function fetchThreads() {
   }
 
   const token = getAccessToken();
-  const response = await fetch(`${normalizeBaseUrl(API_BASE_URL)}/threads`, {
+  const rawResponse = await fetch(`${normalizeBaseUrl(API_BASE_URL)}/threads`, {
     headers: {
       'Authorization': `Bearer ${token}`
     }
   });
+  const response = handleAuthError(rawResponse);
 
   if (!response.ok) {
     throw new Error(
@@ -91,7 +92,7 @@ export async function getStreamMessages({
   signal,
 }) {
   const token = getAccessToken();
-  const res = await fetch(API_BASE_URL + url, {
+  const rawRes = await fetch(API_BASE_URL + url, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
@@ -101,6 +102,7 @@ export async function getStreamMessages({
     body: JSON.stringify(body),
     signal,
   });
+  const res = handleAuthError(rawRes);
 
   if (!res.body) {
     throw new Error("ReadableStream not supported");
@@ -163,7 +165,7 @@ function parseSSE(buffer, onEvent) {
 
 export async function createThread(title, assistantId) {
   const token = getAccessToken();
-  const response = await fetch(`${normalizeBaseUrl(API_BASE_URL)}/threads`, {
+  const rawResponse = await fetch(`${normalizeBaseUrl(API_BASE_URL)}/threads`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
@@ -176,6 +178,7 @@ export async function createThread(title, assistantId) {
       },
     }),
   });
+  const response = handleAuthError(rawResponse);
 
   if (!response.ok) {
     throw new Error(
@@ -189,12 +192,13 @@ export async function createThread(title, assistantId) {
 export async function deleteThread(threadId) {
   if (!threadId) return;
   const token = getAccessToken();
-  const response = await fetch(`${normalizeBaseUrl(API_BASE_URL)}/threads/${threadId}`, {
+  const rawResponse = await fetch(`${normalizeBaseUrl(API_BASE_URL)}/threads/${threadId}`, {
     method: "DELETE",
     headers: {
       'Authorization': `Bearer ${token}`
     }
   });
+  const response = handleAuthError(rawResponse);
 
   if (!response.ok) {
     throw new Error(`Failed to delete thread: ${response.status}`);
@@ -206,7 +210,7 @@ export async function updateThread(threadId, metadata) {
   if (!threadId) return;
   const token = getAccessToken();
   // Attempt to update thread metadata via PATCH if supported
-  const response = await fetch(`${normalizeBaseUrl(API_BASE_URL)}/threads/${threadId}`, {
+  const rawResponse = await fetch(`${normalizeBaseUrl(API_BASE_URL)}/threads/${threadId}`, {
     method: "PATCH",
     headers: {
       "Content-Type": "application/json",
@@ -214,11 +218,12 @@ export async function updateThread(threadId, metadata) {
     },
     body: JSON.stringify({ metadata })
   });
+  const response = handleAuthError(rawResponse);
 
   if (!response.ok) {
     // Some versions might use POST for update
     if (response.status === 405) {
-      const postResponse = await fetch(`${normalizeBaseUrl(API_BASE_URL)}/threads/${threadId}`, {
+      const rawPostResponse = await fetch(`${normalizeBaseUrl(API_BASE_URL)}/threads/${threadId}`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -226,6 +231,7 @@ export async function updateThread(threadId, metadata) {
         },
         body: JSON.stringify({ metadata })
       });
+      const postResponse = handleAuthError(rawPostResponse);
       if (!postResponse.ok) throw new Error("Update failed");
       return postResponse.json();
     }
@@ -238,7 +244,7 @@ export async function threadHistory(threadId) {
   if (!threadId) return [];
 
   const token = getAccessToken();
-  const response = await fetch(
+  const rawResponse = await fetch(
     `${normalizeBaseUrl(API_BASE_URL)}/threads/${threadId}/history`,
     {
       headers: {
@@ -246,6 +252,7 @@ export async function threadHistory(threadId) {
       }
     }
   );
+  const response = handleAuthError(rawResponse);
 
   if (!response.ok) {
     throw new Error(
@@ -282,7 +289,7 @@ export function stopStream(thread_id, run_id, containerId) {
       },
     }
   ).pipe(
-    switchMap(res => res.ok ? res.json() : Promise.reject(res)),
+    switchMap(res => { handleAuthError(res); return res.ok ? res.json() : Promise.reject(res); }),
     catchError(err =>
       of({
         success: false,
@@ -305,7 +312,7 @@ export function stopStream(thread_id, run_id, containerId) {
       },
       body: JSON.stringify({ container_id: containerId }),
     }).pipe(
-      switchMap(res => res.ok ? res.json() : Promise.reject(res)),
+      switchMap(res => { handleAuthError(res); return res.ok ? res.json() : Promise.reject(res); }),
       catchError(err =>
         of({
           success: false,
@@ -355,15 +362,16 @@ export function cancelRun(thread_id, run_id) {
       },
     }
   ).pipe(
-    switchMap(res =>
-      res.ok
+    switchMap(res => {
+      handleAuthError(res);
+      return res.ok
         ? res.json()
         : of({
           success: false,
           source: "cancelRun",
           error: `Cancel failed: ${res.status} ${res.statusText}`,
-        })
-    ),
+        });
+    }),
     catchError(err =>
       of({
         success: false,
@@ -397,15 +405,16 @@ export function cleanupContainer(containerId) {
     },
     body: JSON.stringify({ container_id: containerId }),
   }).pipe(
-    switchMap(res =>
-      res.ok
+    switchMap(res => {
+      handleAuthError(res);
+      return res.ok
         ? res.json()
         : of({
           success: false,
           source: "cleanup",
           error: `Cleanup failed: ${res.status} ${res.statusText}`,
-        })
-    ),
+        });
+    }),
     catchError(err =>
       of({
         success: false,
