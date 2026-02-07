@@ -16,9 +16,11 @@ import {
   IoSparklesOutline,
   IoArrowDownCircle
 } from "react-icons/io5";
+// import { ThinkingIndicator } from "./ThinkingIndicators";
 
 export default function ChatSection({
   chatBodyRef,
+  toolCalls,
   input,
   isLoading,
   customStates,
@@ -63,11 +65,20 @@ export default function ChatSection({
     }
   };
 
-  const slashOptions = [
-    { id: "agent", label: "Chat", icon: <IoChatbubbleEllipsesOutline size={18} />, description: "Standard conversation mode" },
-    { id: "training_module_graph", label: "Training", icon: <IoSchoolOutline size={18} />, description: "Generate educational content" },
+  /* ---------- SLASH OPTIONS ---------- */
+  const slashOptions = useMemo(() => [
+    // { id: "agent", label: "Chat", icon: <IoChatbubbleEllipsesOutline size={18} />, description: "Standard conversation mode" },
+    { id: "agent", label: "Training", icon: <IoSchoolOutline size={18} />, description: "Generate educational content" },
     { id: "live_demo", label: "Live Demo", icon: <IoPlayCircleOutline size={18} />, description: "Interact with a live sandbox" },
-  ];
+  ], []);
+
+  const handleSuggestionClick = (suggestion) => {
+    if (onInputChange) {
+      onInputChange({ target: { value: suggestion } });
+    }
+    // Optionally focus the input or auto-submit if desired.
+    // For now, just setting the text is a good UX.
+  };
 
   const handleDownload = useCallback((content) => {
     if (!content) return;
@@ -242,7 +253,7 @@ export default function ChatSection({
   useEffect(() => {
     if (currentAssistantId) {
       const matched = slashOptions.find(opt => opt.id === currentAssistantId);
-      if (matched) {
+      if (matched && matched.id !== "live_demo") {
         setActiveModule(matched);
       }
     }
@@ -336,13 +347,15 @@ export default function ChatSection({
   };
 
   const handleSelectModule = (module) => {
-    setActiveModule(module);
+    if (module.id != 'live_demo') {
+      setActiveModule(module);
+    }
     onAssistantSuggestionSelect?.(module);
     onInputChange("");
   };
 
-
-  const markdownComponents = {
+  /* ---------- MARKDOWN COMPONENTS ---------- */
+  const markdownComponents = useMemo(() => ({
     /* ---------- HEADINGS ---------- */
     h1: ({ node, ...props }) => (
       <h1 className="text-2xl font-bold mb-4 mt-6 text-zinc-900" {...props} />
@@ -403,7 +416,7 @@ export default function ChatSection({
         {...props}
       />
     ),
-  };
+  }), []);
 
 
 
@@ -433,18 +446,41 @@ export default function ChatSection({
           className="flex-1 space-y-6 overflow-y-auto px-6 py-6 scroll-smooth"
         >
           {isStreamNewChat && newStreamingList.length === 0 && !isLoading && (
-            <div className="flex h-full flex-col items-center justify-center text-center px-4 animate-in fade-in zoom-in-95 duration-700">
-              <div className="mb-4 p-4 bg-zinc-50 rounded-full text-[var(--brand)]">
-                <IoSparklesOutline size={32} className="animate-pulse" />
+            <div className="flex flex-col items-center justify-center h-full px-4 md:px-12 animate-in fade-in zoom-in-95 duration-700">
+              {/* Background Blobs */}
+              <div className="absolute top-0 right-0 -mr-20 -mt-20 w-72 h-72 bg-purple-500/30 rounded-full blur-3xl opacity-20 animate-pulse"></div>
+              <div className="absolute bottom-0 left-0 -ml-20 -mb-20 w-72 h-72 bg-[var(--brand)]/30 rounded-full blur-3xl opacity-20 animate-pulse" style={{ animationDelay: '1s' }}></div>
+
+              <div className="relative w-full max-w-4xl grid grid-cols-1 md:grid-cols-4 grid-rows-2 gap-4">
+                {/* Hero Tile (Span 4) - Unified Welcome Message */}
+                <div className="col-span-1 md:col-span-4 row-span-2 relative overflow-hidden rounded-3xl border border-white/20 bg-white/40 dark:bg-zinc-900/40 backdrop-blur-md shadow-xl p-8 flex flex-col justify-between items-center text-center group">
+                  <div className="absolute inset-0 bg-gradient-to-br from-white/40 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500"></div>
+                  <div className="flex flex-col items-center">
+                    <div className="inline-flex items-center justify-center p-3 rounded-2xl bg-gradient-to-br from-[var(--brand)] to-purple-600 text-white mb-6 shadow-lg transform group-hover:scale-110 transition-transform duration-300">
+                      <IoSparklesOutline size={24} />
+                    </div>
+                    <h2 className="text-3xl font-bold tracking-tight text-zinc-800 dark:text-zinc-100 leading-tight">
+                      Hi I’m <span className="bg-gradient-to-r from-[var(--brand)] to-purple-600 bg-clip-text text-transparent">TASConnect</span>
+                    </h2>
+                    <div className="mt-8 space-y-4 text-zinc-600 dark:text-zinc-300 leading-relaxed text-base max-w-2xl mx-auto">
+                      <p>
+                        I’m here to support you by bringing structure, clarity, and perspective to whatever you’re working through—whether it’s technical detail, process design, or a business decision that needs sharper framing.
+                      </p>
+                      <p>
+                        You can treat this space as a working session: ask questions, pressure-test ideas, or walk through something step by step. I’ll stay focused on what moves things forward.
+                      </p>
+                    </div>
+                  </div>
+                  <div className="mt-10">
+                    <p className="text-sm font-medium text-zinc-500 uppercase tracking-widest">Ready to assist</p>
+                  </div>
+                </div>
+
               </div>
-              <h2 className="text-xl font-semibold text-zinc-800 mb-2">
-                Start a new conversation
-              </h2>
-              <p className="text-sm text-zinc-400 max-w-sm leading-relaxed">
-                Ask a question or type{" "}
-                <span className="font-mono text-[var(--brand)] font-bold">/</span>{" "}
-                to switch modes.
-              </p>
+
+              {/* <div className="mt-12 opacity-60">
+                <p className="text-sm text-zinc-500 animate-pulse">What would you like to work on today?</p>
+              </div> */}
             </div>
           )}
 
@@ -508,6 +544,30 @@ export default function ChatSection({
 
             /* ================= ASSISTANT ================= */
 
+            // Check if it's a tool-related message
+            const hasToolCalls = msg.tool_calls && msg.tool_calls.length > 0;
+            const isToolResult = msg.role === 'tool' || msg.type === 'tool';
+
+            // If it's a tool result, specific instructions say "wrap or remove". 
+            // We'll hide raw tool results from the main stream to declutter.
+            if (isToolResult) {
+              return null;
+            }
+
+            // If it's an assistant message with tool calls but NO content, 
+            // render a simple text line indicating tool usage.
+            if (hasToolCalls && !msg.content) {
+              const toolNames = msg.tool_calls.map(tc => tc.function ? tc.function.name : tc.name).join(", ");
+              return (
+                <div key={msgId} className="flex flex-col gap-2 w-full max-w-5xl mx-auto px-4">
+                  <span className="text-xs text-zinc-400 italic">
+                    Using tool: {toolNames}...
+                  </span>
+                </div>
+              );
+            }
+
+            // For standard messages (or mixed content/tool calls where content exists)
             return (
               <div key={msgId} className="flex flex-col gap-4">
                 <div
@@ -548,32 +608,45 @@ export default function ChatSection({
                   )}
 
                   {/* ===== MESSAGE BODY ===== */}
-                  <div
-                    className={`group relative rounded-2xl border border-zinc-200 text-[13.5px] text-zinc-700 ${isTrainingModule
-                      ? "min-h-[300px] border-2 bg-zinc-50/30 p-8 shadow-inner"
-                      : "bg-white px-5 py-4 shadow-sm"
-                      }`}
-                  >
-                    {!isTrainingModule && (<CopyIconButton
-                      className="absolute top-2 right-2 text-zinc-400 hover:text-[var(--brand)]
-                          opacity-0 group-hover:opacity-100
-                          pointer-events-none group-hover:pointer-events-auto
-                          transition-opacity duration-200"
-                    />)
-                    }
-                    <ReactMarkdown
-                      remarkPlugins={[remarkGfm]}
-                      components={markdownComponents}
+                  {/* Only render the bubble if there is actual content */}
+                  {msg.content && (
+                    <div
+                      className={`group relative rounded-2xl border border-zinc-200 text-[13.5px] text-zinc-700 ${isTrainingModule
+                        ? "min-h-[300px] border-2 bg-zinc-50/30 p-8 shadow-inner"
+                        : "bg-white px-5 py-4 shadow-sm"
+                        }`}
                     >
-                      {msg.content || ""}
-                    </ReactMarkdown>
+                      {!isTrainingModule && (<CopyIconButton
+                        className="absolute top-2 right-2 text-zinc-400 hover:text-[var(--brand)]
+                            opacity-0 group-hover:opacity-100
+                            pointer-events-none group-hover:pointer-events-auto
+                            transition-opacity duration-200"
+                      />)
+                      }
+                      <ReactMarkdown
+                        remarkPlugins={[remarkGfm]}
+                        components={markdownComponents}
+                      >
+                        {msg.content || ""}
+                      </ReactMarkdown>
 
-                    {/* {msg.isStreaming && (
-                      <span className="inline-block ml-1 animate-pulse text-zinc-400">
-                        ▍
+                      {/* {msg.isStreaming && (
+                        <span className="inline-block ml-1 animate-pulse text-zinc-400">
+                          ▍
+                        </span>
+                      )} */}
+                    </div>
+                  )}
+
+                  {/* If there are tool calls AND content, show indicator below text */}
+                  {hasToolCalls && msg.content && (
+                    <div className="mt-2">
+                      <span className="text-xs text-zinc-400 italic">
+                        Using tool: {msg.tool_calls.map(tc => tc.function ? tc.function.name : tc.name).join(", ")}...
                       </span>
-                    )} */}
-                  </div>
+                    </div>
+                  )}
+
                 </div>
               </div>
             );
@@ -667,7 +740,10 @@ export default function ChatSection({
                     ? "Type / to change mode..."
                     : "Reply..."
                 }
-                className="flex-1 resize-none text-sm py-2.5 px-2 min-h-[44px] max-h-[200px]"
+                className="flex-1 resize-none text-sm py-2.5 px-2 min-h-[44px] max-h-[200px]
+             border-0 outline-none focus:outline-none focus:ring-0
+             bg-transparent"
+
               />
 
 

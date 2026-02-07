@@ -263,6 +263,28 @@ export async function threadHistory(threadId) {
   return response.json();
 }
 
+export async function getArtifact(threadId, artifactId) {
+  if (!threadId || !artifactId) return null;
+  const token = getAccessToken();
+  const rawResponse = await fetch(
+    `${normalizeBaseUrl(API_BASE_URL)}/threads/${threadId}/artifacts/${artifactId}`,
+    {
+      headers: {
+        'Authorization': `Bearer ${token}`
+      }
+    }
+  );
+  const response = handleAuthError(rawResponse);
+
+  if (!response.ok) {
+    throw new Error(
+      `Failed to fetch artifact: ${response.status} ${response.statusText}`
+    );
+  }
+
+  return response.json();
+}
+
 /* -------------------- Stop Stream (RxJS) -------------------- */
 
 export function stopStream(thread_id, run_id, containerId) {

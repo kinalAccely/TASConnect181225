@@ -227,7 +227,7 @@ export default function LeftSidebar({
   const handleLogout = async () => {
     try {
       await logout();
-      navigate('/auth');
+      navigate('/login');
     } catch (error) {
       console.error('Logout failed:', error);
     }
@@ -302,8 +302,9 @@ export default function LeftSidebar({
                   key={normalizedId}
                   className="relative group w-full"
                 >
-                  <button
-                    type="button"
+                  <div
+                    role="button"
+                    tabIndex={0}
                     onClick={() => handleNavigate(item)}
                     ref={(node) => {
                       if (!node) {
@@ -312,7 +313,12 @@ export default function LeftSidebar({
                       }
                       threadRefs.current.set(normalizedId, node);
                     }}
-                    className={`w-full rounded-2xl border px-3 py-2 text-left transition-all flex items-center justify-between ${isSelected
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' || e.key === ' ') {
+                        handleNavigate(item);
+                      }
+                    }}
+                    className={`w-full rounded-2xl border px-3 py-2 text-left transition-all flex items-center justify-between cursor-pointer ${isSelected
                       ? "border-[var(--brand)] bg-[var(--brand-lighter)] text-black shadow"
                       : "border-transparent bg-zinc-50 text-zinc-600 hover:bg-[var(--brand-lighter)] hover:text-black"
                       }`}
@@ -349,7 +355,7 @@ export default function LeftSidebar({
                         </button>
                       </div>
                     )}
-                  </button>
+                  </div>
 
                   {/* Dropdown Menu */}
                   {activeMenuId === normalizedId && (

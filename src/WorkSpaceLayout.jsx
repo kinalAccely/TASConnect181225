@@ -3,18 +3,14 @@ import LeftSidebar from "./components/LeftSidebar.jsx";
 import ChatSection from "./components/ChatSection.jsx";
 import RightSidebar from "./components/RightSidebar.jsx";
 import TopHeader from "./components/TopHeader.jsx";
-import { resolveAssistantId, fetchThreadById, getStreamMessages, createThread, threadHistory, stopStream, cancelRun, cleanupContainer } from "./services/threadService.js";
+import { resolveAssistantId, fetchThreadById, getStreamMessages, createThread, threadHistory, stopStream, cancelRun, cleanupContainer, getArtifact } from "./services/threadService.js";
+import ComingSoonModal from "./components/ComingSoonModal.jsx";
 import { useLocation, useNavigate, useParams } from "react-router-dom";
 
 const DEFAULT_ASSISTANT_ID = resolveAssistantId();
 const ASSISTANT_SUGGESTIONS = [
   {
     id: DEFAULT_ASSISTANT_ID,
-    label: "Chat",
-    description: "Have a general conversation with the TAS assistant.",
-  },
-  {
-    id: resolveAssistantId("training_module_graph"),
     label: "Training",
     description: "Run through guided onboarding and training flows.",
   },
@@ -27,7 +23,7 @@ const ASSISTANT_SUGGESTIONS = [
 const UNIFIED_STREAM_MODES = ["messages", "modules", "metadata", "custom", "updates", "messages-tuple", "values"];
 const MODULE_STREAM_RULES = {
   agent: {
-    acceptEvents: ["result", "router", "aggregator"],
+    acceptEvents: ["result", "aggregator"],
     hideIntermediateAssistants: true,
   },
 
@@ -69,22 +65,28 @@ export default function workSpaceLayout() {
   const [runId, setRunId] = useState('');
   const [liveDemoThinking, setLiveDemoThinking] = useState([]);
   const [reloadThread, setReloadThread] = useState('')
+  const [toolCalls, setToolCalls] = useState([])
 
   const [containerId, setContainerId] = useState('');
   const [showDemoSteps, setShowDemoSteps] = useState('');
+  const [showComingSoon, setShowComingSoon] = useState(false);
 
   const { chatId: threadChatId } = useParams();
   useEffect(() => {
     const pathParts = location.pathname.split("/");
     if (pathParts.length >= 3 && pathParts[1] === "chat") {
       setThreadChatId(pathParts[2]);
+    } else if (pathParts.length === 2 && pathParts[1] === "chat") {
+      openNewChat();
     }
-  }, [location.pathname])
+  }, [location.pathname]);
 
   const assistantSuggestions = React.useMemo(() => ASSISTANT_SUGGESTIONS, []);
 
   React.useEffect(() => {
+    console.log(threadChatId);
     if (threadChatId) {
+      setLoadHistoryToggle(`load_${Date.now()}`);
       setThreadChatId(threadChatId);
       setShowAssistantChooser(false);
     }
@@ -164,22 +166,22 @@ export default function workSpaceLayout() {
     [],
   );
 
-  useEffect(() => {
-    setThreadChatId(threadChatId);
-  }, [threadChatId])
+  // useEffect(() => {
+  //   setThreadChatId(threadChatId);
+  // }, [threadChatId])
+
+  // useEffect(() => {
+  //   setLoadHistoryToggle(`load_${Date.now()}`);
+  // }, [loadHistory, threadChatId])
+
+  // useEffect(() => {
+  //   if (state_assistant_id) {
+  //     setAssistantId(state_assistant_id);
+  //   }
+  // }, [state_assistant_id]);
 
   useEffect(() => {
-    setLoadHistoryToggle(`load_${Date.now()}`);
-  }, [loadHistory, threadChatId])
-
-  useEffect(() => {
-    if (state_assistant_id) {
-      setAssistantId(state_assistant_id);
-    }
-  }, [state_assistant_id]);
-
-  useEffect(() => {
-    if (!selectedThreadChatId || searchedText.length === 0) return;
+    if (!threadChatId || searchedText.length === 0) return;
     setRunId('');
     setInput('');
     setLoadHistoryToggle("");
@@ -196,7 +198,7 @@ export default function workSpaceLayout() {
 
     setTimeout(() => {
       getStreamMessages({
-        url: `/threads/${selectedThreadChatId}/runs/stream`,
+        url: `/threads/${threadChatId}/runs/stream`,
         body: {
           input: {
             messages: [{ role: "user", content: searchedText }]
@@ -220,12 +222,25 @@ export default function workSpaceLayout() {
 
           if (event === 'messages' || event.includes('messages')) {
             data.forEach((msg) => {
-              if (msg.tool_calls && msg.tool_calls.length > 0) {
-                msg.tool_calls.forEach((tool) => {
-                  if (tool.name === "AssignerOutput" && (tool.args?.all_done === true || tool.input?.all_done === true)) {
-                    setStreamSandboxUrl("");
-                  }
-                });
+              const hasToolUse = (msg.tool_calls && msg.tool_calls.length > 0) ||
+                (Array.isArray(msg.content) && msg.content.some(c => c.type === 'tool_use'));
+
+              if (hasToolUse) {
+                if (msg.tool_calls) {
+                  msg.tool_calls.forEach((tool) => {
+                    if (tool.name === "AssignerOutput" && (tool.args?.all_done === true || tool.input?.all_done === true)) {
+                      setStreamSandboxUrl("");
+                    }
+                  });
+                }
+                // NEW LOGIC: Reset content for this message if tool usage detected
+                const idx = streamedListRef.current.findIndex(m => m.id === msg.id);
+                if (idx !== -1) {
+                  // instead of splicing, we just clear the content so the "previous text" is gone
+                  // but the message remains to show the tool status
+                  streamedListRef.current[idx].content = "";
+                  streamedListRef.current[idx].tool_calls = msg.tool_calls;
+                }
               }
             });
 
@@ -258,6 +273,18 @@ export default function workSpaceLayout() {
               let aiMessages = data.filter(msg => msg.type === "AIMessageChunk");
               console.log(aiMessages);
               aiMessages.forEach(msg => {
+                // If this chunk has tool calls, ensure we update our ref
+                // If this chunk has tool calls, ensure we update our ref
+                const hasToolUse = (msg.tool_calls && msg.tool_calls.length > 0) ||
+                  (Array.isArray(msg.content) && msg.content.some(c => c.type === 'tool_use'));
+
+                if (hasToolUse) {
+                  const idx = streamedListRef.current.findIndex(m => m.id === msg.id);
+                  if (idx !== -1 && msg.tool_calls) {
+                    streamedListRef.current[idx].tool_calls = msg.tool_calls;
+                  }
+                }
+
                 const idx = streamedListRef.current.findIndex(m => m.id === msg.id);
                 if (msg.content?.length && msg.content[0].type == 'text') {
                   if (idx !== -1) {
@@ -266,7 +293,7 @@ export default function workSpaceLayout() {
                   else {
                     streamedListRef.current.push({
                       id: msg.id,
-                      role: "assistant",
+                      role: "assistant", // "ai" -> "assistant"
                       content: msg.content[0].text,
                       langgraph_node: data[1].langgraph_node // ✅ stored here
                     });
@@ -285,6 +312,20 @@ export default function workSpaceLayout() {
 
           }
           else {
+            if (event === 'updates' || event.includes('updates')) {
+              let obj = Object.keys(data);
+              data[obj[0]]?.messages?.forEach((msg) => {
+                if (msg.tool_calls && msg.tool_calls.length > 0) {
+                  if (msg.content) {
+                    setToolMessages(prev => [
+                      ...prev,
+                      Array.isArray(msg.content) ? msg.content.map((c) => c.text || "").join("") : msg.content
+                    ]);
+                  }
+                }
+              });
+              console.log(toolMessages);
+            }
             if (data?.invoke_init?.sandbox_url) {
               setContainerId(data.invoke_init.container_id)
               setStreamSandboxUrl(data.invoke_init.sandbox_url);
@@ -322,13 +363,13 @@ export default function workSpaceLayout() {
   }, [threadChatId, searchedText]);
 
 
-  useEffect(() => {
-    if (threadChatId) {
-      setIsStreamNewChat(false);
-      setSearchedText('');
-      // threadHistory(threadChatId);
-    }
-  }, [threadChatId])
+  // useEffect(() => {
+  //   if (threadChatId) {
+  //     setIsStreamNewChat(false);
+  //     setSearchedText('');
+  //     // threadHistory(threadChatId);
+  //   }
+  // }, [threadChatId])
 
 
   useEffect(() => {
@@ -345,58 +386,105 @@ export default function workSpaceLayout() {
   }, [initialMessage]);
 
   useEffect(() => {
-    if (!selectedThreadChatId) return;
+    if (!threadChatId) return;
     let cancelled = false;
     setIsRightCollapsed(true);
     setShowDemoSteps(false);
     setLiveDemoThinking([]);
     if (loadHistoryToggle.includes("load")) {
-      threadHistory(selectedThreadChatId).then((response) => {
+      threadHistory(threadChatId).then(async (response) => {
         if (cancelled) return;
         setInput('');
         setSearchedText('');
         const historyMessages = Array.isArray(response) ? response : [];
 
-        const filteredMessages = [];
         const LiveDemoAssistantMessages = [];
 
         const msg_values = historyMessages[0]?.values?.messages;
         setStreamSandboxUrl(historyMessages[0]?.values?.sandbox_url)
-        for (let i = 0; i < msg_values?.length; i++) {
 
-          const msg = msg_values[i];
+        const processedMessages = await Promise.all(
+          (msg_values || []).map(async (msg) => {
+            if (!msg) return null;
+            if (msg.type !== "human" && msg.type !== "ai") return null;
+            if ((typeof msg.content !== "string") && !Array.isArray(msg.content)) return null;
 
-          if (!msg) continue;
-          if (msg.type !== "human" && msg.type !== "ai") continue;
-          if ((typeof msg.content !== "string") && !Array.isArray(msg.content)) continue;
-          if (['training_module_graph', 'agent'].includes(assistantId)) {
-            console.log(msg, msg.content);
-            // if ((typeof msg.content == 'string') ? true : msg.content[0].type == 'text') {
-            filteredMessages.push({
-              id: msg.id,
-              role: msg.type === "human" ? "user" : "assistant",
-              content: typeof msg.content == 'string' ? msg.content : (msg.content?.length > 0 ? msg.content[0].text : '')
-            });
-            // }
-          }
-          else {
-            if (msg.type == 'human') {
-              filteredMessages.push({
-                id: msg.id,
-                role: msg.type === "human" ? "user" : "assistant",
-                content: msg.content,
-                video_url: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4'
-              });
+            if (['training_module_graph', 'agent'].includes(assistantId)) {
+              if (msg.content?.length > 1 && msg.content[1].type == 'tool_use') {
+                return;
+              }
+              let content = typeof msg.content == 'string' ? msg.content : (msg.content?.length > 0 ? msg.content[0].text : '');
+              let langgraph_node = msg.langgraph_node || '';
+              if (msg.additional_kwargs?.artifact_id) {
+                try {
+                  const artifactContent = await getArtifact(threadChatId, msg.additional_kwargs.artifact_id);
+                  if (artifactContent) {
+                    let artifactText = '';
+                    if (typeof artifactContent === 'object') {
+                      artifactText = artifactContent.content || artifactContent.text || JSON.stringify(artifactContent, null, 2);
+                    } else {
+                      artifactText = String(artifactContent);
+                    }
+
+                    const arrayObj = [];
+                    if (artifactText) {
+                      arrayObj.push({
+                        id: `${msg.id}_artifact`, // Ensure unique ID
+                        role: msg.type === "human" ? "user" : "assistant",
+                        content: artifactText,
+                        langgraph_node: 'aggregator'
+                      });
+                    }
+                    if (content) {
+                      arrayObj.push({
+                        id: msg.id,
+                        role: msg.type === "human" ? "user" : "assistant",
+                        content: content,
+                        langgraph_node: 'ai'
+                      });
+                    }
+                    if (arrayObj.length > 0) return arrayObj;
+                  }
+                } catch (e) {
+                  console.error("Failed to load artifact", e);
+                }
+              }
+
+              if (content) {
+                return {
+                  id: msg.id,
+                  role: msg.type === "human" ? "user" : "assistant",
+                  content,
+                  langgraph_node
+                };
+              }
             } else {
-              LiveDemoAssistantMessages.push({
-                id: msg.id,
-                role: msg.type === "human" ? "user" : "assistant",
-                content: msg.content,
-              })
+              if (msg.type == 'human') {
+                return {
+                  id: msg.id,
+                  type: 'demo',
+                  role: msg.type === "human" ? "user" : "assistant",
+                  content: msg.content,
+                  video_url: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4'
+                };
+              } else {
+                LiveDemoAssistantMessages.push({
+                  id: msg.id,
+                  role: msg.type === "human" ? "user" : "assistant",
+                  content: msg.content,
+                });
+                return null;
+              }
             }
+            return null;
+          })
+        );
 
-          }
-        }
+        const filteredMessages = processedMessages.flat().filter(Boolean);
+        // Handle Live Demo Logic Separation
+        // The original code pushed to filteredMessages OR LiveDemoAssistantMessages. 
+        // My map returns objects for filteredMessages (agent) or demo-user messages. 
+        // LiveDemo assistant messages are pushed to LiveDemoAssistantMessages as side effect inside map.
 
         console.log(filteredMessages);
 
@@ -447,7 +535,7 @@ export default function workSpaceLayout() {
         });
       }
     });
-  }, [searchedText, threadChatId])
+  }, [searchedText])
 
   const handleSubmit = () => {
     if (!input) return;
@@ -478,6 +566,10 @@ export default function workSpaceLayout() {
 
   const handleAssistantSuggestionSelect = (response) => {
     console.log(response);
+    if (response.id === resolveAssistantId("live_demo") || response.label === "Live Demo") {
+      setShowComingSoon(true);
+      return;
+    }
     setAssistantId(response.id);
   }
 
@@ -495,7 +587,7 @@ export default function workSpaceLayout() {
               onStartNewChat={openNewChat}
               onToggleCollapse={toggleLeftCollapse}
               refreshThread={reloadThread}
-              selectedChatId={selectedThreadChatId}
+              selectedChatId={threadChatId}
             />
           </div>
 
@@ -504,6 +596,7 @@ export default function workSpaceLayout() {
             newStreamingList={newStreamingList}
             chatBodyRef={chatBodyRef}
             input={input}
+            toolCalls={toolCalls}
             isLoading={chatIsLoading}
             isStreamNewChat={isStreamNewChat}
             sandboxUrl={streamSandboxUrl}
@@ -519,6 +612,7 @@ export default function workSpaceLayout() {
             onAssistantSuggestionSelect={handleAssistantSuggestionSelect}
             shouldShowAssistantSuggestions={shouldShowAssistantSuggestions}
             threadId={threadChatId}
+            onShowComingSoon={() => setShowComingSoon(true)}
           />
 
           <RightSidebar
@@ -533,6 +627,7 @@ export default function workSpaceLayout() {
           />
         </div>
       </div>
+      <ComingSoonModal isOpen={showComingSoon} onClose={() => setShowComingSoon(false)} />
     </div>
   );
 
