@@ -462,7 +462,7 @@ export default function ChatSection({
                     <h2 className="text-3xl font-bold tracking-tight text-zinc-800 dark:text-zinc-100 leading-tight">
                       Hi I’m <span className="bg-gradient-to-r from-[var(--brand)] to-purple-600 bg-clip-text text-transparent">TASConnect</span>
                     </h2>
-                    <div className="mt-8 space-y-4 text-zinc-600 dark:text-zinc-300 leading-relaxed text-base max-w-2xl mx-auto">
+                    <div className="mt-8 space-y-4 text-zinc-600 dark:text-zinc-300 leading-relaxed text-sm max-w-2xl mx-auto">
                       <p>
                         I’m here to support you by bringing structure, clarity, and perspective to whatever you’re working through—whether it’s technical detail, process design, or a business decision that needs sharper framing.
                       </p>
@@ -471,7 +471,7 @@ export default function ChatSection({
                       </p>
                     </div>
                   </div>
-                  <div className="mt-10">
+                  <div className="mt-6">
                     <p className="text-sm font-medium text-zinc-500 uppercase tracking-widest">Ready to assist</p>
                   </div>
                 </div>

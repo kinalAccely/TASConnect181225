@@ -48,11 +48,16 @@ export default function AuthPage() {
         <div className="flex min-h-screen w-full items-center justify-center bg-gradient-to-br from-[var(--brand-lighter)] via-zinc-50 to-white px-4 py-12">
             <div className="w-full max-w-md">
                 {/* Logo/Brand */}
-                <div className="mb-8 text-center fade-slide-in">
-                    <div className="mb-3 inline-flex h-16 w-16 items-center justify-center rounded-2xl bg-[var(--brand)] shadow-lg shadow-[var(--brand-shadow-strong)]">
-                        <span className="text-2xl font-bold text-white">TAS</span>
+                <div className="mb-4 text-center fade-slide-in">
+                    <div className="flex items-center gap-3 justify-center">
+                        <div className="flex items-center text-2xl font-semibold tracking-tight text-black">
+                            <span className="text-black">TAS</span>
+                            <span className="mx-1 flex items-center" aria-hidden="true">
+                                <span className="inline-block h-3 w-3 rounded-full bg-[var(--brand)]" />
+                            </span>
+                            <span className="text-zinc-700">connect</span>
+                        </div>
                     </div>
-                    <h1 className="text-3xl font-bold text-zinc-900">TAS Connect</h1>
                     <p className="mt-2 text-sm text-zinc-600">
                         {activeTab === 'login'
                             ? 'Welcome back! Sign in to continue.'
@@ -85,7 +90,7 @@ export default function AuthPage() {
                     </div>
 
                     {/* Forms */}
-                    <div className="fade-slide-in">
+                    <div className="fade-slide-in max-h-[50vh] overflow-y-auto px-1 custom-scrollbar">
                         {activeTab === 'login' ? (
                             <LoginForm
                                 onSubmit={handleLogin}
@@ -102,7 +107,7 @@ export default function AuthPage() {
                     </div>
 
                     {/* Footer */}
-                    <div className="mt-6 text-center text-sm text-zinc-600">
+                    <div className="mt-4 text-center text-sm text-zinc-600">
                         {activeTab === 'login' ? (
                             <p>
                                 Don't have an account?{' '}
@@ -128,7 +133,7 @@ export default function AuthPage() {
                 </div>
 
                 {/* Additional Info */}
-                <p className="mt-6 text-center text-xs text-zinc-500">
+                <p className="mt-4 text-center text-xs text-zinc-500">
                     By continuing, you agree to TAS Connect's Terms of Service and Privacy Policy.
                 </p>
             </div>

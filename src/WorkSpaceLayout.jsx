@@ -66,6 +66,7 @@ export default function workSpaceLayout() {
   const [liveDemoThinking, setLiveDemoThinking] = useState([]);
   const [reloadThread, setReloadThread] = useState('')
   const [toolCalls, setToolCalls] = useState([])
+  const isToolCallRef = useRef(false);
 
   const [containerId, setContainerId] = useState('');
   const [showDemoSteps, setShowDemoSteps] = useState('');
@@ -221,88 +222,50 @@ export default function workSpaceLayout() {
           if (!["messages", "updates"].includes(event)) return;
 
           if (event === 'messages' || event.includes('messages')) {
-            data.forEach((msg) => {
-              const hasToolUse = (msg.tool_calls && msg.tool_calls.length > 0) ||
-                (Array.isArray(msg.content) && msg.content.some(c => c.type === 'tool_use'));
+            if (isToolCallRef.current) {
+              // Find the last assistant message to remove (the one currently streaming)
+              let idx = -1;
+              for (let i = streamedListRef.current.length - 1; i >= 0; i--) {
+                if (streamedListRef.current[i].role === "assistant") {
+                  idx = i;
+                  break;
+                }
+              }
+
+              if (idx != -1) {
+                streamedListRef.current.splice(idx, 1);
+              }
+              setNewStreamingList([...streamedListRef.current]);
+              isToolCallRef.current = false;
+            }
+            hasResultRef.current = MODULE_STREAM_RULES[assistantId].acceptEvents?.length === 0 || MODULE_STREAM_RULES[assistantId].acceptEvents?.includes(data[1].langgraph_node) || assistantId == 'live_demo'
+            if (!hasResultRef.current) return;
+
+            let aiMessages = data.filter(msg => msg.type === "AIMessageChunk");
+            aiMessages.forEach(msg => {
+              // If this chunk has tool calls, ensure we update our ref
+              const hasToolUse = Array.isArray(msg.content) && msg.content.some(c => c.type === 'tool_use');
 
               if (hasToolUse) {
-                if (msg.tool_calls) {
-                  msg.tool_calls.forEach((tool) => {
-                    if (tool.name === "AssignerOutput" && (tool.args?.all_done === true || tool.input?.all_done === true)) {
-                      setStreamSandboxUrl("");
-                    }
-                  });
-                }
-                // NEW LOGIC: Reset content for this message if tool usage detected
-                const idx = streamedListRef.current.findIndex(m => m.id === msg.id);
+                isToolCallRef.current = true;
+              }
+
+              const idx = streamedListRef.current.findIndex(m => m.id === msg.id);
+              if (msg.content?.length && msg.content[0].type == 'text') {
                 if (idx !== -1) {
-                  // instead of splicing, we just clear the content so the "previous text" is gone
-                  // but the message remains to show the tool status
-                  streamedListRef.current[idx].content = "";
-                  streamedListRef.current[idx].tool_calls = msg.tool_calls;
+                  streamedListRef.current[idx].content += msg.content[0].text;
+                }
+                else {
+                  streamedListRef.current.push({
+                    id: msg.id,
+                    role: "assistant", // "ai" -> "assistant"
+                    content: msg.content[0].text,
+                    langgraph_node: data[1].langgraph_node // ✅ stored here
+                  });
                 }
               }
             });
 
-            hasResultRef.current = MODULE_STREAM_RULES[assistantId].acceptEvents?.length === 0 || MODULE_STREAM_RULES[assistantId].acceptEvents?.includes(data[1].langgraph_node) || assistantId == 'live_demo'
-            if (!hasResultRef.current) return;
-            if (assistantId == 'live_demo') {
-              data
-                .filter(msg => msg.type === "ai")
-                .forEach(msg => {
-                  const idx = streamedDemoListRef.current.findIndex(m => m.id === msg.id);
-                  if (msg.content?.length) {
-                    let filterText = msg.content.filter(res => res.type == 'text');
-                    if (filterText?.length) {
-                      if (idx !== -1) {
-                        streamedDemoListRef.current[idx].content += filterText[0].text;
-                      }
-                      else {
-                        streamedDemoListRef.current.push({
-                          id: msg.id,
-                          role: "assistant",
-                          content: filterText[0].text,
-                          langgraph_node: data[1].langgraph_node // ✅ stored here
-                        })
-                      }
-                    }
-                  }
-                })
-            }
-            else {
-              let aiMessages = data.filter(msg => msg.type === "AIMessageChunk");
-              console.log(aiMessages);
-              aiMessages.forEach(msg => {
-                // If this chunk has tool calls, ensure we update our ref
-                // If this chunk has tool calls, ensure we update our ref
-                const hasToolUse = (msg.tool_calls && msg.tool_calls.length > 0) ||
-                  (Array.isArray(msg.content) && msg.content.some(c => c.type === 'tool_use'));
-
-                if (hasToolUse) {
-                  const idx = streamedListRef.current.findIndex(m => m.id === msg.id);
-                  if (idx !== -1 && msg.tool_calls) {
-                    streamedListRef.current[idx].tool_calls = msg.tool_calls;
-                  }
-                }
-
-                const idx = streamedListRef.current.findIndex(m => m.id === msg.id);
-                if (msg.content?.length && msg.content[0].type == 'text') {
-                  if (idx !== -1) {
-                    streamedListRef.current[idx].content += msg.content[0].text;
-                  }
-                  else {
-                    streamedListRef.current.push({
-                      id: msg.id,
-                      role: "assistant", // "ai" -> "assistant"
-                      content: msg.content[0].text,
-                      langgraph_node: data[1].langgraph_node // ✅ stored here
-                    });
-                  }
-                }
-              });
-            }
-
-            console.log(streamedDemoListRef);
             setNewStreamingList([...streamedListRef.current]);
             setLiveDemoThinking([...streamedDemoListRef.current])
             if (streamedDemoListRef.current?.length) {
@@ -406,7 +369,7 @@ export default function workSpaceLayout() {
         const processedMessages = await Promise.all(
           (msg_values || []).map(async (msg) => {
             if (!msg) return null;
-            if (msg.type !== "human" && msg.type !== "ai") return null;
+            if (msg.type !== "human" && msg.type !== "assistant" && msg.type !== "ai") return null;
             if ((typeof msg.content !== "string") && !Array.isArray(msg.content)) return null;
 
             if (['training_module_graph', 'agent'].includes(assistantId)) {
