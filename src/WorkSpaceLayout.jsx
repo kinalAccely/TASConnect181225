@@ -222,22 +222,6 @@ export default function workSpaceLayout() {
           if (!["messages", "updates"].includes(event)) return;
 
           if (event === 'messages' || event.includes('messages')) {
-            if (isToolCallRef.current) {
-              // Find the last assistant message to remove (the one currently streaming)
-              let idx = -1;
-              for (let i = streamedListRef.current.length - 1; i >= 0; i--) {
-                if (streamedListRef.current[i].role === "assistant") {
-                  idx = i;
-                  break;
-                }
-              }
-
-              if (idx != -1) {
-                streamedListRef.current.splice(idx, 1);
-              }
-              setNewStreamingList([...streamedListRef.current]);
-              isToolCallRef.current = false;
-            }
             hasResultRef.current = MODULE_STREAM_RULES[assistantId].acceptEvents?.length === 0 || MODULE_STREAM_RULES[assistantId].acceptEvents?.includes(data[1].langgraph_node) || assistantId == 'live_demo'
             if (!hasResultRef.current) return;
 
@@ -252,6 +236,22 @@ export default function workSpaceLayout() {
 
               const idx = streamedListRef.current.findIndex(m => m.id === msg.id);
               if (msg.content?.length && msg.content[0].type == 'text') {
+                if (isToolCallRef.current) {
+                  // Find the last assistant message to remove (the one currently streaming)
+                  let inner_idx = -1;
+                  for (let i = streamedListRef.current.length - 1; i >= 0; i--) {
+                    if (streamedListRef.current[i].role === "assistant") {
+                      inner_idx = i;
+                      break;
+                    }
+                  }
+
+                  if (inner_idx != -1) {
+                    streamedListRef.current.splice(inner_idx, 1);
+                  }
+                  setNewStreamingList([...streamedListRef.current]);
+                  isToolCallRef.current = false;
+                }
                 if (idx !== -1) {
                   streamedListRef.current[idx].content += msg.content[0].text;
                 }

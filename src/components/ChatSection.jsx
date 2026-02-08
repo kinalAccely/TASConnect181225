@@ -18,6 +18,43 @@ import {
 } from "react-icons/io5";
 // import { ThinkingIndicator } from "./ThinkingIndicators";
 
+/* ---------- CODE BLOCK COMPONENT ---------- */
+const CodeBlock = ({ children, ...props }) => {
+  const [copied, setCopied] = useState(false);
+  const preRef = useRef(null);
+
+  const handleCopy = () => {
+    if (preRef.current) {
+      const text = preRef.current.innerText || "";
+      navigator.clipboard.writeText(text).then(() => {
+        setCopied(true);
+        setTimeout(() => setCopied(false), 2000);
+      });
+    }
+  };
+
+  return (
+    <div className="relative group my-4 rounded-lg bg-zinc-900 border border-zinc-800">
+      <div className="absolute top-2 right-2 flex items-center justify-end z-10">
+        <button
+          onClick={handleCopy}
+          className="p-1.5 rounded-md text-zinc-400 hover:text-white hover:bg-zinc-800 transition-all opacity-0 group-hover:opacity-100"
+          title="Copy code"
+        >
+          {copied ? <IoCheckmark size={16} className="text-green-500" /> : <IoCopyOutline size={16} />}
+        </button>
+      </div>
+      <pre
+        ref={preRef}
+        className="overflow-x-auto p-4 text-sm text-white font-mono scrollbar-thin scrollbar-thumb-zinc-700 scrollbar-track-transparent bg-transparent"
+        {...props}
+      >
+        {children}
+      </pre>
+    </div>
+  );
+};
+
 export default function ChatSection({
   chatBodyRef,
   toolCalls,
@@ -90,6 +127,12 @@ export default function ChatSection({
       .replace(/^## (.*)$/gm, '<h2>$1</h2>')
       .replace(/^# (.*)$/gm, '<h1>$1</h1>')
 
+      /* ---------- CODE BLOCKS ---------- */
+      .replace(/```(\w+)?\n([\s\S]*?)```/g, '<pre><code class="language-$1">$2</code></pre>')
+
+      /* ---------- INLINE CODE ---------- */
+      .replace(/`([^`]+)`/g, '<code>$1</code>')
+
       /* ---------- HORIZONTAL RULE ---------- */
       .replace(/^\s*---\s*$/gm, '<hr />')
 
@@ -149,40 +192,41 @@ export default function ChatSection({
       }
 
       h1 {
-        font-size: 22px;
+        font-size: 24px;
         font-weight: 700;
-        margin: 24px 0 12px;
-        color: #0f172a;
+        margin: 24px 0 16px;
+        color: #18181b;
       }
 
       h2 {
-        font-size: 18px;
+        font-size: 20px;
         font-weight: 600;
-        margin: 20px 0 10px;
-        border-bottom: 1px solid #e5e7eb;
-        padding-bottom: 4px;
-        color: #0f172a;
+        margin: 20px 0 12px;
+        border-bottom: 1px solid #e4e4e7;
+        padding-bottom: 6px;
+        color: #18181b;
       }
 
       h3 {
-        font-size: 16px;
+        font-size: 18px;
         font-weight: 600;
-        margin: 16px 0 8px;
-        color: #1f2937;
+        margin: 16px 0 10px;
+        color: #27272a;
       }
 
       p {
-        margin-bottom: 12px;
+        margin-bottom: 16px;
+        text-align: justify;
       }
 
       hr {
         border: none;
-        border-top: 1px solid #e5e7eb;
+        border-top: 1px solid #e4e4e7;
         margin: 24px 0;
       }
 
       ul {
-        margin: 8px 0 12px 20px;
+        margin: 8px 0 16px 20px;
         padding-left: 16px;
       }
 
@@ -193,26 +237,93 @@ export default function ChatSection({
       table {
         width: 100%;
         border-collapse: collapse;
-        margin: 16px 0;
-        font-size: 13px;
+        margin: 20px 0;
+        font-size: 14px;
       }
 
       th, td {
-        border: 1px solid #e5e7eb;
-        padding: 8px;
+        border: 1px solid #d4d4d8;
+        padding: 10px;
         text-align: left;
         vertical-align: top;
       }
 
       th {
-        background: #f1f5f9;
+        background: #f4f4f5;
         font-weight: 600;
-        color: #0f172a;
+        color: #18181b;
       }
 
       b {
         font-weight: 600;
-        color: #0f172a;
+        color: #18181b;
+      }
+      
+      pre {
+        background-color: #18181b;
+        color: #f4f4f5;
+        padding: 16px;
+        border-radius: 8px;
+        overflow-x: auto;
+        font-family: Consolas, 'Courier New', monospace;
+        font-size: 13px;
+        margin: 20px 0;
+        white-space: pre-wrap;
+      }
+
+      code {
+        font-family: Consolas, 'Courier New', monospace;
+        background-color: #f4f4f5;
+        padding: 2px 4px;
+        border-radius: 4px;
+        font-size: 13px;
+        color: #18181b;
+      }
+
+      pre code {
+        background-color: transparent;
+        padding: 0;
+        color: #f4f4f5 !important;
+        border-radius: 0;
+      }
+
+      /* FOOTER STYLES */
+      p.MsoFooter, li.MsoFooter, div.MsoFooter {
+        margin: 0;
+        margin-bottom: 0.0001pt;
+        mso-pagination: widow-orphan;
+        tab-stops: center 3.0in right 6.0in;
+        font-size: 12.0pt;
+      }
+
+      @page WordSection1 {
+        size: 8.5in 11in;
+        margin: 1.0in 1.0in 1.0in 1.0in;
+        mso-header-margin: 0.5in;
+        mso-footer-margin: 0.5in;
+        mso-title-page: yes;
+        mso-header: url("https://dummyimage.com/1x1/000000/000000.png") h1; /* Dummy header to force footer */
+        mso-footer: url("https://dummyimage.com/1x1/000000/000000.png") f1;
+        mso-first-header: url("https://dummyimage.com/1x1/000000/000000.png") fh1;
+        mso-first-footer: url("https://dummyimage.com/1x1/000000/000000.png") ff1;
+        mso-paper-source: 0;
+      }
+
+      div.WordSection1 {
+        page: WordSection1;
+      }
+
+      table#footerTable {
+        width: 100%;
+        border: none;
+        border-top: 1px solid #e5e7eb;
+      }
+
+      div.footer-content {
+        font-family: 'Segoe UI', sans-serif;
+        font-size: 14pt;
+        font-weight: 600;
+        color: black;
       }
     </style>
   `;
@@ -225,9 +336,40 @@ export default function ChatSection({
       <head>
         <meta charset="utf-8" />
         ${cssStyles}
+        <xml>
+          <w:WordDocument>
+            <w:View>Print</w:View>
+            <w:Zoom>100</w:Zoom>
+            <w:DoNotOptimizeForBrowser/>
+          </w:WordDocument>
+        </xml>
       </head>
       <body>
-        ${formattedContent}
+        <div class="WordSection1">
+          ${formattedContent}
+          <br clear="all" style="page-break-before:always" />
+          
+          <!-- FOOTER DEFINITION -->
+          <div style="mso-element:footer" id="f1">
+            <p class="MsoFooter">
+              <table id="footerTable" style="width: 100%; border-collapse: collapse;">
+                <tr>
+                  <td style="padding-top: 10px; text-align: left; vertical-align: middle;">
+                     <p style="margin: 0; font-family: 'Segoe UI', sans-serif; font-size: 16pt; font-weight: 600; color: black;">
+                       <span>TAS</span>
+                       <span style="color: #f23c39; font-size: 20pt; vertical-align: middle; line-height: 1;">&#8226;</span>
+                       <span style="color: #374151;">connect</span>
+                     </p>
+                  </td>
+                </tr>
+              </table>
+            </p>
+          </div>
+          
+          <div style="mso-element:header" id="h1">
+             <!-- HEADER CONTENT (Empty) -->
+          </div>
+        </div>
       </body>
     </html>
   `;
@@ -354,6 +496,8 @@ export default function ChatSection({
     onInputChange("");
   };
 
+
+
   /* ---------- MARKDOWN COMPONENTS ---------- */
   const markdownComponents = useMemo(() => ({
     /* ---------- HEADINGS ---------- */
@@ -369,11 +513,30 @@ export default function ChatSection({
 
     /* ---------- TEXT ---------- */
     p: ({ node, ...props }) => (
-      <p className="mb-3 last:mb-0 leading-relaxed text-zinc-700" {...props} />
+      <p className="mb-3 last:mb-0 leading-relaxed text-zinc-700 break-words" {...props} />
     ),
     strong: ({ node, ...props }) => (
       <strong className="font-semibold text-zinc-900" {...props} />
     ),
+
+    /* ---------- CODE ---------- */
+    pre: ({ node, ...props }) => (
+      <CodeBlock {...props} />
+    ),
+    code: ({ node, inline, className, children, ...props }) => {
+      if (inline) {
+        return (
+          <code className="rounded bg-zinc-100 px-1 py-0.5 text-sm font-mono text-zinc-900 break-all" {...props}>
+            {children}
+          </code>
+        );
+      }
+      return (
+        <code className={`${className} bg-transparent p-0 text-inherit font-mono`} {...props}>
+          {children}
+        </code>
+      );
+    },
 
     /* ---------- LISTS ---------- */
     ul: ({ node, ...props }) => (
@@ -500,8 +663,7 @@ export default function ChatSection({
             const currentAssistantId =
               msg.assistant_id || propsAssistantId || activeModule?.id;
 
-            const isTrainingModule =
-              currentAssistantId === "training_module_graph" && (msg.langgraph_node && msg.langgraph_node != 'router');
+            const isTrainingModule = msg.langgraph_node == 'aggregator'
 
             const isAgent = currentAssistantId === "agent";
             const isLiveDemo = activeModule?.id === "live_demo";
@@ -557,12 +719,13 @@ export default function ChatSection({
             // If it's an assistant message with tool calls but NO content, 
             // render a simple text line indicating tool usage.
             if (hasToolCalls && !msg.content) {
-              const toolNames = msg.tool_calls.map(tc => tc.function ? tc.function.name : tc.name).join(", ");
               return (
-                <div key={msgId} className="flex flex-col gap-2 w-full max-w-5xl mx-auto px-4">
-                  <span className="text-xs text-zinc-400 italic">
-                    Using tool: {toolNames}...
-                  </span>
+                <div key={msgId} className="flex flex-col gap-1 w-full max-w-5xl mx-auto px-4">
+                  {msg.tool_calls.map((tc, index) => (
+                    <span key={index} className="text-xs text-zinc-400 italic animate-pulse">
+                      Using tool: {tc.function ? tc.function.name : tc.name}...
+                    </span>
+                  ))}
                 </div>
               );
             }
