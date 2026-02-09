@@ -772,7 +772,7 @@ export default function ChatSection({
               <div key={msgId} className="flex flex-col gap-4">
                 <div
                   className={`flex flex-col gap-2 ${isTrainingModule
-                    ? "w-full max-w-5xl mx-auto"
+                    ? "w-full max-w-5xl "
                     : "max-w-[85%]"
                     }`}
                 >
@@ -874,46 +874,47 @@ export default function ChatSection({
             <div className="flex justify-start">
               <div className="group flex items-center justify-between gap-4 w-full max-w-sm rounded-xl border border-zinc-200/50 bg-white/90 backdrop-blur-sm px-6 py-4 shadow-[0_4px_20px_-2px_rgba(0,0,0,0.05)] animate-in fade-in slide-in-from-bottom-2 duration-300 transition-all hover:bg-white">
                 <div className="flex w-full items-center justify-between relative">
-                  {/* Progress Line Background */}
-                  <div className="absolute top-1/2 left-0 right-0 h-0.5 bg-zinc-100 -z-10 transform -translate-y-1/2"></div>
+                  {/* Multi-step progress indicator */}
+                  {['starting', 'compiling', 'completed'].includes(customStates) && (
+                    <>
+                      {/* Progress Line Background */}
+                      <div className="absolute top-1/2 left-0 right-0 h-0.5 bg-zinc-100 -z-10 transform -translate-y-1/2"></div>
 
-                  {/* Steps */}
-                  {[
-                    { id: 'starting', label: 'Initialize', icon: IoPlayCircleOutline },
-                    { id: 'compiling', label: 'Compile', icon: IoLayersOutline },
-                    { id: 'completed', label: 'Complete', icon: IoCheckmark }
-                  ].map((step, index) => {
-                    const currentStepIndex = ['starting', 'compiling', 'completed'].indexOf(customStates);
+                      {/* Steps */}
+                      {[
+                        { id: 'starting', label: 'Initialize', icon: IoPlayCircleOutline },
+                        { id: 'compiling', label: 'Compile', icon: IoLayersOutline },
+                        { id: 'completed', label: 'Complete', icon: IoCheckmark }
+                      ].map((step, index) => {
+                        const currentStepIndex = ['starting', 'compiling', 'completed'].indexOf(customStates);
+                        const isCompleted = (currentStepIndex > index && currentStepIndex !== -1) || customStates === 'completed';
+                        const isActive = customStates === step.id;
 
-                    const isCompleted = (currentStepIndex > index && currentStepIndex !== -1) || customStates === 'completed';
-                    const isActive = customStates === step.id;
-
-                    const showSteps = ['starting', 'compiling', 'completed'].includes(customStates);
-                    if (!showSteps) return null;
-
-                    return (
-                      <div key={step.id} className="flex flex-col items-center gap-2 bg-white px-2 z-10 transition-all duration-300">
-                        <div
-                          className={`flex items-center justify-center w-8 h-8 rounded-full border-2 transition-all duration-300 ${isActive
-                            ? 'border-[var(--brand)] bg-[var(--brand)]/10 text-[var(--brand)] scale-110 shadow-md'
-                            : isCompleted
-                              ? 'border-green-500 bg-green-50 text-green-500'
-                              : 'border-zinc-200 bg-white text-zinc-300'
-                            }`}
-                        >
-                          {isCompleted ? (
-                            <IoCheckmark size={16} />
-                          ) : (
-                            <step.icon size={16} className={`${isActive && step.id !== 'completed' ? 'animate-pulse' : ''}`} />
-                          )}
-                        </div>
-                        <span className={`text-[10px] font-medium uppercase tracking-wider transition-colors duration-300 ${isActive ? 'text-[var(--brand)] font-bold' : isCompleted ? 'text-green-600' : 'text-zinc-400'
-                          }`}>
-                          {step.label}
-                        </span>
-                      </div>
-                    );
-                  })}
+                        return (
+                          <div key={step.id} className="flex flex-col items-center gap-2 bg-white px-2 z-10 transition-all duration-300">
+                            <div
+                              className={`flex items-center justify-center w-8 h-8 rounded-full border-2 transition-all duration-300 ${isActive
+                                ? 'border-[var(--brand)] bg-[var(--brand)]/10 text-[var(--brand)] scale-110 shadow-md'
+                                : isCompleted
+                                  ? 'border-green-500 bg-green-50 text-green-500'
+                                  : 'border-zinc-200 bg-white text-zinc-300'
+                                }`}
+                            >
+                              {isCompleted ? (
+                                <IoCheckmark size={16} />
+                              ) : (
+                                <step.icon size={16} className={`${isActive && step.id !== 'completed' ? 'animate-pulse' : ''}`} />
+                              )}
+                            </div>
+                            <span className={`text-[10px] font-medium uppercase tracking-wider transition-colors duration-300 ${isActive ? 'text-[var(--brand)] font-bold' : isCompleted ? 'text-green-600' : 'text-zinc-400'
+                              }`}>
+                              {step.label}
+                            </span>
+                          </div>
+                        );
+                      })}
+                    </>
+                  )}
 
                   {/* Fallback for Generic "Processing" State */}
                   {!['starting', 'compiling', 'completed'].includes(customStates) && (
