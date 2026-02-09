@@ -616,16 +616,16 @@ export default function ChatSection({
 
               <div className="relative w-full max-w-4xl grid grid-cols-1 md:grid-cols-4 grid-rows-2 gap-4">
                 {/* Hero Tile (Span 4) - Unified Welcome Message */}
-                <div className="col-span-1 md:col-span-4 row-span-2 relative overflow-hidden rounded-3xl border border-white/20 bg-white/40 dark:bg-zinc-900/40 backdrop-blur-md shadow-xl p-8 flex flex-col justify-between items-center text-center group">
+                <div className="col-span-1 md:col-span-4 row-span-2 relative overflow-hidden rounded-3xl border border-white/20 bg-white/40 backdrop-blur-md shadow-xl p-8 flex flex-col justify-between items-center text-center group">
                   <div className="absolute inset-0 bg-gradient-to-br from-white/40 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500"></div>
                   <div className="flex flex-col items-center">
                     <div className="inline-flex items-center justify-center p-3 rounded-2xl bg-gradient-to-br from-[var(--brand)] to-purple-600 text-white mb-6 shadow-lg transform group-hover:scale-110 transition-transform duration-300">
                       <IoSparklesOutline size={24} />
                     </div>
-                    <h2 className="text-3xl font-bold tracking-tight text-zinc-800 dark:text-zinc-100 leading-tight">
+                    <h2 className="text-3xl font-bold tracking-tight text-zinc-800 leading-tight">
                       Hi I’m <span className="bg-gradient-to-r from-[var(--brand)] to-purple-600 bg-clip-text text-transparent">TASConnect</span>
                     </h2>
-                    <div className="mt-8 space-y-4 text-zinc-600 dark:text-zinc-300 leading-relaxed text-sm max-w-2xl mx-auto">
+                    <div className="mt-8 space-y-4 text-zinc-600 leading-relaxed text-sm max-w-2xl mx-auto">
                       <p>
                         I’m here to support you by bringing structure, clarity, and perspective to whatever you’re working through—whether it’s technical detail, process design, or a business decision that needs sharper framing.
                       </p>
@@ -777,7 +777,7 @@ export default function ChatSection({
                       className={`group relative rounded-2xl border border-zinc-200 text-[13.5px] text-zinc-700 ${isTrainingModule
                         ? "min-h-[300px] border-2 bg-zinc-50/30 p-8 shadow-inner"
                         : "bg-white px-5 py-4 shadow-sm"
-                        }`}
+                        } ${msg.hasToolCall ? "animate-pulse" : ""}`}
                     >
                       {!isTrainingModule && (<CopyIconButton
                         className="absolute top-2 right-2 text-zinc-400 hover:text-[var(--brand)]
@@ -835,15 +835,35 @@ export default function ChatSection({
 
           {isLoading && newStreamingList.length > 0 && activeModule?.id != 'live_demo' && (
             <div className="flex justify-start">
-              <div className="flex items-center gap-2 rounded-2xl border border-zinc-100 bg-white px-5 py-4 shadow-sm">
-                <div className="flex gap-1">
-                  <span className="w-1.5 h-1.5 bg-[var(--brand)] rounded-full animate-bounce" />
-                  <span className="w-1.5 h-1.5 bg-[var(--brand)] rounded-full animate-bounce [animation-delay:-0.15s]" />
-                  <span className="w-1.5 h-1.5 bg-[var(--brand)] rounded-full animate-bounce [animation-delay:-0.3s]" />
+              <div className="flex items-center gap-2 rounded-2xl border border-zinc-100 bg-white px-5 py-4 shadow-sm animate-in fade-in slide-in-from-bottom-2 duration-300">
+                <div className="flex gap-2 items-center">
+                  {customStates === 'starting' && (
+                    <IoPlayCircleOutline className="w-5 h-5 text-blue-500 animate-pulse" />
+                  )}
+                  {customStates === 'compiling' && (
+                    <IoLayersOutline className="w-5 h-5 text-amber-500 animate-spin" />
+                  )}
+                  {customStates === 'completed' && (
+                    <IoCheckmark className="w-5 h-5 text-green-500" />
+                  )}
+                  {!['starting', 'compiling', 'completed'].includes(customStates) && (
+                    <div className="flex gap-1">
+                      <span className="w-1.5 h-1.5 bg-[var(--brand)] rounded-full animate-bounce" />
+                      <span className="w-1.5 h-1.5 bg-[var(--brand)] rounded-full animate-bounce [animation-delay:-0.15s]" />
+                      <span className="w-1.5 h-1.5 bg-[var(--brand)] rounded-full animate-bounce [animation-delay:-0.3s]" />
+                    </div>
+                  )}
+                  <span className="text-[12px] font-medium text-zinc-400 italic">
+                    {(() => {
+                      switch (customStates) {
+                        case 'starting': return 'Starting...';
+                        case 'compiling': return 'Compiling...';
+                        case 'completed': return 'Completed';
+                        default: return customStates || 'Processing...';
+                      }
+                    })()}
+                  </span>
                 </div>
-                <span className="text-[12px] font-medium text-zinc-400 italic">
-                  {customStates ? customStates : 'Thinking...'}
-                </span>
               </div>
             </div>
           )}
