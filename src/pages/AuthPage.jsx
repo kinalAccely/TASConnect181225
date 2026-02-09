@@ -3,6 +3,7 @@ import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import LoginForm from '../components/auth/LoginForm';
 import RegisterForm from '../components/auth/RegisterForm';
+import logo from '../assets/TASConnect_Logo.png';
 
 export default function AuthPage() {
     const [activeTab, setActiveTab] = useState('login');
@@ -49,16 +50,12 @@ export default function AuthPage() {
             <div className="w-full max-w-md">
                 {/* Logo/Brand */}
                 <div className="mb-4 text-center fade-slide-in">
-                    <div className="flex items-center gap-3 justify-center">
-                        <div className="flex items-center text-2xl font-semibold tracking-tight text-black">
-                            <span className="text-black">TAS</span>
-                            <span className="mx-1 flex items-center" aria-hidden="true">
-                                <span className="inline-block h-3 w-3 rounded-full bg-[var(--brand)]" />
-                            </span>
-                            <span className="text-zinc-700">connect</span>
-                        </div>
-                    </div>
-                    <p className="mt-2 text-sm text-zinc-600">
+                    <img
+                        src={logo}
+                        alt="TAS Connect"
+                        className="mx-auto h-12 w-auto"
+                    />
+                    <p className="text-sm text-zinc-600">
                         {activeTab === 'login'
                             ? 'Welcome back! Sign in to continue.'
                             : 'Create your account to get started.'}

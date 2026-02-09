@@ -232,6 +232,10 @@ export default function workSpaceLayout() {
 
               if (hasToolUse) {
                 isToolCallRef.current = true;
+                let index = streamedListRef.current.length - 1;
+                if (streamedListRef.current[index].role == 'assistant') {
+                  streamedListRef.current[index].hasToolCall = true;
+                }
               }
 
               const idx = streamedListRef.current.findIndex(m => m.id === msg.id);
