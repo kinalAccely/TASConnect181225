@@ -11,6 +11,7 @@ import { FiEdit2, FiTrash2 } from "react-icons/fi";
 import { fetchThreads, deleteThread, updateThread } from "../services/threadService.js";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../contexts/AuthContext";
+import logo from '../assets/TASConnect_Logo.png';
 
 /* ---------------- helpers ---------------- */
 
@@ -245,6 +246,14 @@ export default function LeftSidebar({
 
   const collapsedContent = (
     <>
+      <div className="flex items-center justify-center mb-2">
+        <img
+          src={logo}
+          alt="TASConnect"
+          className="h-10 w-auto object-contain"
+        />
+      </div>
+
       <button
         onClick={handleNewChat}
         disabled={isLoading || creating}

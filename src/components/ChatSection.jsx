@@ -3,6 +3,18 @@ import ReactMarkdown from "react-markdown";
 import remarkGfm from 'remark-gfm';
 import { useLocation } from "react-router-dom";
 import {
+  Document,
+  Packer,
+  Paragraph,
+  Header,
+  Footer,
+  ImageRun,
+  TextRun,
+  AlignmentType,
+  PageNumber,
+} from "docx";
+
+import {
   IoSend,
   IoCopyOutline,
   IoCheckmark,
@@ -14,8 +26,12 @@ import {
   IoPlayCircleOutline,
   IoSchoolOutline,
   IoSparklesOutline,
-  IoArrowDownCircle
+  IoArrowDownCircle,
+  IoArrowUpCircle
 } from "react-icons/io5";
+
+import { saveAs } from "file-saver";
+
 import SourceTooltip from "./SourceTooltip";
 // import { ThinkingIndicator } from "./ThinkingIndicators";
 
@@ -102,6 +118,8 @@ export default function ChatSection({
       return trimmed;
     }
   };
+
+
 
   /* ---------- SLASH OPTIONS ---------- */
   const slashOptions = useMemo(() => [
@@ -336,6 +354,17 @@ export default function ChatSection({
         font-weight: 600;
         color: black;
       }
+
+      /* ADDITIONAL REFINEMENTS */
+      .prose-a {
+        color: #f23c39;
+        text-decoration: underline;
+      }
+      
+      table th {
+        background-color: #f8fafc;
+        border-bottom: 2px solid #e2e8f0;
+      }
     </style>
   `;
 
@@ -454,14 +483,16 @@ export default function ChatSection({
 
   const showSlashMenu = isStreamNewChat && newStreamingList.length === 0 && input.startsWith("/");
   const [scrollBottom, setScrollBottom] = useState('');
-  const [showScrollButton, setShowScrollButton] = useState(false);
+  const [scrollTopFlag, setScrollTopFlag] = useState('');
+  const [showScrollBottomButton, setShowScrollBottomButton] = useState(false);
+  const [showScrollTopButton, setShowScrollTopButton] = useState(false);
 
   // Auto-scroll only if user was already at the bottom
   useEffect(() => {
     if (chatBodyRef.current && isAtBottomRef.current) {
       chatBodyRef.current.scrollTo({
         top: chatBodyRef.current.scrollHeight,
-        behavior: 'smooth'
+        behavior: 'auto' // Changed from 'smooth' to 'auto' to prevent interference with manual scrolling
       });
     }
   }, [newStreamingList]);
@@ -469,7 +500,8 @@ export default function ChatSection({
   // Reset scroll state when thread changes
   useEffect(() => {
     isAtBottomRef.current = true;
-    setShowScrollButton(false);
+    setShowScrollBottomButton(false);
+    setShowScrollTopButton(false);
     if (chatBodyRef.current) {
       chatBodyRef.current.scrollTo({
         top: chatBodyRef.current.scrollHeight,
@@ -486,16 +518,29 @@ export default function ChatSection({
         behavior: 'smooth'
       });
       isAtBottomRef.current = true;
-      setShowScrollButton(false);
+      setShowScrollBottomButton(false);
     }
   }, [scrollBottom]);
+
+  // Force scroll top when scrollTopFlag changes (button click)
+  useEffect(() => {
+    if (chatBodyRef.current && scrollTopFlag) {
+      chatBodyRef.current.scrollTo({
+        top: 0,
+        behavior: 'smooth'
+      });
+      setShowScrollTopButton(false);
+    }
+  }, [scrollTopFlag]);
 
   const handleScroll = () => {
     if (chatBodyRef.current) {
       const { scrollTop, scrollHeight, clientHeight } = chatBodyRef.current;
       const isBottom = scrollHeight - scrollTop - clientHeight < 100;
+      const isTop = scrollTop < 200;
       isAtBottomRef.current = isBottom;
-      setShowScrollButton(!isBottom);
+      setShowScrollBottomButton(!isBottom);
+      setShowScrollTopButton(!isTop);
     }
   };
 
@@ -626,12 +671,24 @@ export default function ChatSection({
   return (
     <div className="relative flex h-full min-h-0 flex-1 flex-col overflow-hidden bg-zinc-50">
 
-      {showScrollButton && (
+      {showScrollTopButton && (
         <button
-          onClick={() => setScrollBottom(`scroll${Date.now()}`)}
+          onClick={() => setScrollTopFlag(`scrollTop${Date.now()}`)}
+          className="absolute top-8 right-8 z-50 flex items-center justify-center
+                   bg-white text-[var(--brand)] rounded-full p-2 shadow-lg border
+                   border-zinc-200 hover:bg-zinc-50 transition-all hover:scale-110"
+          aria-label="Scroll to top"
+        >
+          <IoArrowUpCircle size={30} />
+        </button>
+      )}
+
+      {showScrollBottomButton && (
+        <button
+          onClick={() => setScrollBottom(`scrollBottom${Date.now()}`)}
           className="absolute bottom-28 right-8 z-50 flex items-center justify-center
                    bg-white text-[var(--brand)] rounded-full p-2 shadow-lg border
-                   border-zinc-200 hover:bg-zinc-50 transition-all animate-bounce"
+                   border-zinc-200 hover:bg-zinc-50 transition-all hover:scale-110"
           aria-label="Scroll to bottom"
         >
           <IoArrowDownCircle size={30} />
@@ -660,7 +717,7 @@ export default function ChatSection({
                       <IoSparklesOutline size={24} />
                     </div>
                     <h2 className="text-3xl font-bold tracking-tight text-zinc-800 leading-tight">
-                      Hi I’m <span className="bg-gradient-to-r from-[var(--brand)] to-purple-600 bg-clip-text text-transparent">TASConnect</span>
+                      Hi I'm <span className="bg-gradient-to-r from-[#f23c39] via-[#8b5cf6] to-[#06b6d4] bg-clip-text text-transparent">TASC</span> <span className="bg-gradient-to-r from-[#ff6b35] via-[#ff8c42] to-[#1a1a1a] bg-clip-text text-transparent font-semibold">Iris</span>
                     </h2>
                     <div className="mt-8 space-y-4 text-zinc-600 leading-relaxed text-sm max-w-2xl mx-auto">
                       <p>
