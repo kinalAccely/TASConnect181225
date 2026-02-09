@@ -72,6 +72,15 @@ export default function workSpaceLayout() {
   const [showDemoSteps, setShowDemoSteps] = useState('');
   const [showComingSoon, setShowComingSoon] = useState(false);
 
+  useEffect(() => {
+    if (customStates === 'completed') {
+      const timer = setTimeout(() => {
+        setCustomStates('');
+      }, 2000);
+      return () => clearTimeout(timer);
+    }
+  }, [customStates]);
+
   const { chatId: threadChatId } = useParams();
   useEffect(() => {
     const pathParts = location.pathname.split("/");

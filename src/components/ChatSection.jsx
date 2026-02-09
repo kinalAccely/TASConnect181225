@@ -16,6 +16,7 @@ import {
   IoSparklesOutline,
   IoArrowDownCircle
 } from "react-icons/io5";
+import SourceTooltip from "./SourceTooltip";
 // import { ThinkingIndicator } from "./ThinkingIndicators";
 
 /* ---------- CODE BLOCK COMPONENT ---------- */
@@ -180,6 +181,16 @@ export default function ChatSection({
       .replace(/\n/g, ' ');
 
     formattedContent = `<p>${formattedContent}</p>`;
+
+    // Add Sources
+    // formattedContent = formattedContent.replace(/\[Source:\s*(.*?)\]/g, (match, ids) => {
+    //   const idList = ids.split(',').map(id => id.trim());
+    //   return `
+    //     <span class="inline-flex items-center gap-1 ml-1 align-baseline">
+    //       ${idList.map(id => `<span class="inline-flex items-center justify-center w-5 h-5 rounded-full bg-zinc-100 text-[10px] text-zinc-500 font-bold border border-zinc-200" title="Source: ${id}">?</span>`).join('')}
+    //     </span>
+    //   `;
+    // }); 
 
     /* ---------- WORD-FRIENDLY CSS ---------- */
     const cssStyles = `
@@ -499,6 +510,24 @@ export default function ChatSection({
 
 
   /* ---------- MARKDOWN COMPONENTS ---------- */
+  const renderWithSources = (text) => {
+    if (typeof text !== 'string') return text;
+
+    const parts = text.split(/(\[Source:\s*.*?\])/g);
+    return parts.map((part, index) => {
+      const match = part.match(/^\[Source:\s*(.*?)\]$/);
+      if (match) {
+        const ids = match[1].split(',').map(id => id.trim());
+        return (
+          <span key={index} className="inline-flex gap-1 items-center align-baseline">
+            {ids.map(id => <SourceTooltip key={id} id={id} />)}
+          </span>
+        );
+      }
+      return part;
+    });
+  };
+
   const markdownComponents = useMemo(() => ({
     /* ---------- HEADINGS ---------- */
     h1: ({ node, ...props }) => (
@@ -512,8 +541,12 @@ export default function ChatSection({
     ),
 
     /* ---------- TEXT ---------- */
-    p: ({ node, ...props }) => (
-      <p className="mb-3 last:mb-0 leading-relaxed text-zinc-700 break-words" {...props} />
+    p: ({ node, children, ...props }) => (
+      <p className="mb-3 last:mb-0 leading-relaxed text-zinc-700 break-words" {...props}>
+        {React.Children.map(children, child =>
+          typeof child === 'string' ? renderWithSources(child) : child
+        )}
+      </p>
     ),
     strong: ({ node, ...props }) => (
       <strong className="font-semibold text-zinc-900" {...props} />
@@ -545,8 +578,12 @@ export default function ChatSection({
     ol: ({ node, ...props }) => (
       <ol className="mb-3 ml-5 list-decimal space-y-1" {...props} />
     ),
-    li: ({ node, ...props }) => (
-      <li className="pl-1 text-zinc-700" {...props} />
+    li: ({ node, children, ...props }) => (
+      <li className="pl-1 text-zinc-700" {...props}>
+        {React.Children.map(children, child =>
+          typeof child === 'string' ? renderWithSources(child) : child
+        )}
+      </li>
     ),
 
     /* ---------- TABLES (FIX) ---------- */
@@ -775,7 +812,7 @@ export default function ChatSection({
                   {msg.content && (
                     <div
                       className={`group relative rounded-2xl border border-zinc-200 text-[13.5px] text-zinc-700 ${isTrainingModule
-                        ? "min-h-[300px] border-2 bg-zinc-50/30 p-8 shadow-inner"
+                        ? "h-[500px] overflow-y-auto scrollbar-thin scrollbar-thumb-zinc-200 scrollbar-track-transparent border-2 bg-zinc-50/30 p-8 shadow-inner"
                         : "bg-white px-5 py-4 shadow-sm"
                         } ${msg.hasToolCall ? "animate-pulse" : ""}`}
                     >
@@ -835,34 +872,61 @@ export default function ChatSection({
 
           {isLoading && newStreamingList.length > 0 && activeModule?.id != 'live_demo' && (
             <div className="flex justify-start">
-              <div className="flex items-center gap-2 rounded-2xl border border-zinc-100 bg-white px-5 py-4 shadow-sm animate-in fade-in slide-in-from-bottom-2 duration-300">
-                <div className="flex gap-2 items-center">
-                  {customStates === 'starting' && (
-                    <IoPlayCircleOutline className="w-5 h-5 text-blue-500 animate-pulse" />
-                  )}
-                  {customStates === 'compiling' && (
-                    <IoLayersOutline className="w-5 h-5 text-amber-500 animate-spin" />
-                  )}
-                  {customStates === 'completed' && (
-                    <IoCheckmark className="w-5 h-5 text-green-500" />
-                  )}
+              <div className="group flex items-center justify-between gap-4 w-full max-w-sm rounded-xl border border-zinc-200/50 bg-white/90 backdrop-blur-sm px-6 py-4 shadow-[0_4px_20px_-2px_rgba(0,0,0,0.05)] animate-in fade-in slide-in-from-bottom-2 duration-300 transition-all hover:bg-white">
+                <div className="flex w-full items-center justify-between relative">
+                  {/* Progress Line Background */}
+                  <div className="absolute top-1/2 left-0 right-0 h-0.5 bg-zinc-100 -z-10 transform -translate-y-1/2"></div>
+
+                  {/* Steps */}
+                  {[
+                    { id: 'starting', label: 'Initialize', icon: IoPlayCircleOutline },
+                    { id: 'compiling', label: 'Compile', icon: IoLayersOutline },
+                    { id: 'completed', label: 'Complete', icon: IoCheckmark }
+                  ].map((step, index) => {
+                    const currentStepIndex = ['starting', 'compiling', 'completed'].indexOf(customStates);
+
+                    const isCompleted = (currentStepIndex > index && currentStepIndex !== -1) || customStates === 'completed';
+                    const isActive = customStates === step.id;
+
+                    const showSteps = ['starting', 'compiling', 'completed'].includes(customStates);
+                    if (!showSteps) return null;
+
+                    return (
+                      <div key={step.id} className="flex flex-col items-center gap-2 bg-white px-2 z-10 transition-all duration-300">
+                        <div
+                          className={`flex items-center justify-center w-8 h-8 rounded-full border-2 transition-all duration-300 ${isActive
+                            ? 'border-[var(--brand)] bg-[var(--brand)]/10 text-[var(--brand)] scale-110 shadow-md'
+                            : isCompleted
+                              ? 'border-green-500 bg-green-50 text-green-500'
+                              : 'border-zinc-200 bg-white text-zinc-300'
+                            }`}
+                        >
+                          {isCompleted ? (
+                            <IoCheckmark size={16} />
+                          ) : (
+                            <step.icon size={16} className={`${isActive && step.id !== 'completed' ? 'animate-pulse' : ''}`} />
+                          )}
+                        </div>
+                        <span className={`text-[10px] font-medium uppercase tracking-wider transition-colors duration-300 ${isActive ? 'text-[var(--brand)] font-bold' : isCompleted ? 'text-green-600' : 'text-zinc-400'
+                          }`}>
+                          {step.label}
+                        </span>
+                      </div>
+                    );
+                  })}
+
+                  {/* Fallback for Generic "Processing" State */}
                   {!['starting', 'compiling', 'completed'].includes(customStates) && (
-                    <div className="flex gap-1">
-                      <span className="w-1.5 h-1.5 bg-[var(--brand)] rounded-full animate-bounce" />
-                      <span className="w-1.5 h-1.5 bg-[var(--brand)] rounded-full animate-bounce [animation-delay:-0.15s]" />
-                      <span className="w-1.5 h-1.5 bg-[var(--brand)] rounded-full animate-bounce [animation-delay:-0.3s]" />
+                    <div className="flex w-full items-center gap-3">
+                      <div className="flex items-center justify-center w-8 h-8 rounded-full bg-[var(--brand)]/10 text-[var(--brand)] animate-pulse">
+                        <IoSparklesOutline size={16} />
+                      </div>
+                      <div className="flex flex-col">
+                        <span className="text-[10px] font-bold uppercase tracking-wider text-zinc-400">Status</span>
+                        <span className="text-xs font-semibold text-zinc-700">Processing Request...</span>
+                      </div>
                     </div>
                   )}
-                  <span className="text-[12px] font-medium text-zinc-400 italic">
-                    {(() => {
-                      switch (customStates) {
-                        case 'starting': return 'Starting...';
-                        case 'compiling': return 'Compiling...';
-                        case 'completed': return 'Completed';
-                        default: return customStates || 'Processing...';
-                      }
-                    })()}
-                  </span>
                 </div>
               </div>
             </div>

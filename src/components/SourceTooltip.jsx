@@ -1,16 +1,9 @@
 import React, { useState } from 'react';
+import { IoLinkOutline } from "react-icons/io5";
 
 const SourceTooltip = ({ id, metadataCache }) => {
     const [isHovered, setIsHovered] = useState(false);
-    const metadata = metadataCache?.[id];
-
-    if (!metadata) {
-        return (
-            <span className="text-xs text-zinc-400 italic">
-                [Source: {id}]
-            </span>
-        );
-    }
+    const metadata = metadataCache?.[id] || { title: id, type: 'source' }; // Fallback metadata
 
     return (
         <span
@@ -25,7 +18,7 @@ const SourceTooltip = ({ id, metadataCache }) => {
         border border-zinc-200 hover:bg-zinc-200 hover:border-zinc-300
         transition-colors duration-200
       ">
-                {metadata.index || '?'}
+                {metadata.index ? metadata.index : <IoLinkOutline size={12} />}
             </span>
 
             {isHovered && (
