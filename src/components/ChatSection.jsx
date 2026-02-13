@@ -20,7 +20,6 @@ import {
   IoArrowUpCircle
 } from "react-icons/io5";
 
-import { saveAs } from "file-saver";
 
 import SourceTooltip from "./SourceTooltip";
 // import { ThinkingIndicator } from "./ThinkingIndicators";
@@ -76,26 +75,22 @@ export default function ChatSection({
   onStop,
   onEditMessage,
   assignTask,
-  sandboxUrl,
+  doneBrowser,
   onAssistantSuggestionSelect,
   threadId,
   assistantId: propsAssistantId,
   currentAssistantId
 }) {
-  const lastRenderedSandboxUrlRef = useRef(null);
   const isAtBottomRef = useRef(true);
-  const shouldRenderSandbox = sandboxUrl && sandboxUrl !== lastRenderedSandboxUrlRef.current;
-  const [sandboxUrlLink, setSandBoxUrl] = useState('');
   const location = useLocation();
 
   useEffect(() => {
-    if (sandboxUrl) {
-      setSandBoxUrl(sandboxUrl);
-    }
-  }, [sandboxUrl])
+    setIsLiveConnected(false);
+  }, [doneBrowser])
   const [updateEventKey, setUpdateEventKey] = useState([]);
   const [showLiveScreen, setShowLiveScreen] = useState(false);
   const [liveImageSrc, setLiveImageSrc] = useState(null);
+  const [isLiveConnected, setIsLiveConnected] = useState(false);
   const liveScreenConnectedRef = useRef(false);
 
   const normalizeSandboxUrl = (url) => {
@@ -565,10 +560,12 @@ export default function ChatSection({
         onFrame: (data) => {
           if (data.frame) {
             setLiveImageSrc(`data:image/jpeg;base64,${data.frame}`);
+            setIsLiveConnected(true);
           }
         },
         onError: (err) => {
           console.error("Live screen SSE error:", err);
+          setIsLiveConnected(false);
         }
       });
     }
@@ -576,6 +573,7 @@ export default function ChatSection({
     return () => {
       console.log("Closing live screen connection");
       abortController.abort();
+      setIsLiveConnected(false);
     };
   }, [showLiveScreen, threadId]);
 
@@ -584,6 +582,17 @@ export default function ChatSection({
     onAssistantSuggestionSelect?.(module);
     onInputChange("");
   };
+
+  // Reset live demo when assignTask becomes false
+  useEffect(() => {
+    if (!assignTask && showLiveScreen) {
+      // Don't remove the screen, just the status
+      // setShowLiveScreen(false);
+      // setLiveImageSrc(null);
+      setIsLiveConnected(false);
+      liveScreenConnectedRef.current = false;
+    }
+  }, [assignTask, showLiveScreen]);
 
 
 
@@ -698,8 +707,6 @@ export default function ChatSection({
 
 
 
-  const normalizedSandbox =
-    sandboxUrl ? normalizeSandboxUrl(sandboxUrl) : null;
 
   return (
     <div className="relative flex h-full min-h-0 flex-1 flex-col overflow-hidden bg-zinc-50">
@@ -946,7 +953,16 @@ export default function ChatSection({
 
           {/* LIVE SCREEN (MJPEG) */}
           {showLiveScreen && liveImageSrc && (
-            <div className="w-full h-[400px] border border-zinc-200 rounded-2xl overflow-hidden shadow-sm flex items-center justify-center bg-black">
+            <div className="w-full h-[400px] border border-zinc-200 rounded-2xl overflow-hidden shadow-sm flex items-center justify-center bg-black relative">
+
+              {/* Live Demo Header */}
+              {isLiveConnected && (
+                <div className="absolute top-4 left-4 flex items-center gap-2 bg-black/50 backdrop-blur-md px-3 py-1.5 rounded-full z-10 transition-all duration-300">
+                  <div className="w-2 h-2 rounded-full bg-green-500 animate-pulse shadow-[0_0_8px_rgba(34,197,94,0.6)]" />
+                  <span className="text-white text-xs font-medium tracking-wide">Live Demo</span>
+                </div>
+              )}
+
               <img
                 src={liveImageSrc}
                 alt="Live Screen"
@@ -957,7 +973,7 @@ export default function ChatSection({
           )}
 
           {/* SANDBOX IFRAME (Fallback/Pre-Live) */}
-          {(!showLiveScreen || !liveImageSrc) && sandboxUrlLink && activeModule?.id == 'live_demo' && !isStreamNewChat && isLoading && (
+          {/* {(!showLiveScreen || !liveImageSrc) && sandboxUrlLink && activeModule?.id == 'live_demo' && !isStreamNewChat && isLoading && (
             <div className="w-full h-[400px] border border-zinc-200 rounded-2xl overflow-hidden shadow-sm">
               <iframe
                 src={normalizeSandboxUrl(sandboxUrlLink)}
@@ -971,7 +987,7 @@ export default function ChatSection({
                 }}
               />
             </div>
-          )}
+          )} */}
 
 
           {isLoading && newStreamingList.length > 0 && activeModule?.id != 'live_demo' && (

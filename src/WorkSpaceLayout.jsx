@@ -42,6 +42,7 @@ export default function workSpaceLayout() {
   const location = useLocation();
   const navigate = useNavigate();
   const chatBodyRef = React.useRef(null);
+  const [doneBrowser, setDoneBrowser] = useState(false);
   const [assignTask, setAssignTask] = useState(false);
   const [assistantId, setAssistantId] = React.useState(DEFAULT_ASSISTANT_ID);
   const [showAssistantChooser, setShowAssistantChooser] = React.useState(false);
@@ -279,9 +280,38 @@ export default function workSpaceLayout() {
                 }
               }
 
-              if (typeof msg.content == 'string') {
-                setLiveDemoThinking(prev => [...prev, msg.content]);
+              // LIVE DEMO: Capture executor thoughts
+              if (assistantId === 'live_demo' && event.includes('call_executor_subgraph')) {
+                // Extract text from content array
+                let text = "";
+                if (Array.isArray(msg.content)) {
+                  text = msg.content
+                    .filter(c => c.type === 'text')
+                    .map(c => c.text || "")
+                    .join("");
+                } else if (typeof msg.content === 'string') {
+                  text = msg.content;
+                }
+
+                if (text) {
+                  const idx = streamedDemoListRef.current.findIndex(m => m.id === msg.id);
+                  if (idx !== -1) {
+                    streamedDemoListRef.current[idx].content += text;
+                  } else {
+                    streamedDemoListRef.current.push({
+                      id: msg.id,
+                      role: "assistant",
+                      content: text
+                    });
+                  }
+
+                  setLiveDemoThinking([...streamedDemoListRef.current]);
+                  setShowDemoSteps(true);
+                  setIsRightCollapsed(false);
+                }
               }
+
+
 
               if (assistantId == 'live_demo' && !assignTask) {
                 setAssignTask(true);
@@ -312,13 +342,6 @@ export default function workSpaceLayout() {
               });
               console.log(toolMessages);
             }
-            if (data?.invoke_init?.sandbox_url) {
-              setContainerId(data.invoke_init.container_id)
-              setStreamSandboxUrl(data.invoke_init.sandbox_url);
-            }
-
-            // if(isStreamNewChat){
-            //   streamedListRef.current = [];
 
           }
         },
@@ -338,6 +361,10 @@ export default function workSpaceLayout() {
                 assistant_id: assistantId
               }
             });
+          }
+
+          if (assistantId == 'live_demo') {
+            setDoneBrowser(true);
           }
           else {
             // setLoadHistoryToggle("load");
@@ -604,6 +631,7 @@ export default function workSpaceLayout() {
             assistantSuggestions={assistantSuggestions}
             currentAssistantId={assistantId}
             assignTask={assignTask}
+            doneBrowser={doneBrowser}
             // activeModule={assistantId}
             onAssistantSuggestionSelect={handleAssistantSuggestionSelect}
             shouldShowAssistantSuggestions={shouldShowAssistantSuggestions}
