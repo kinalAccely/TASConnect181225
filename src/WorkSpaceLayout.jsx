@@ -33,7 +33,7 @@ const MODULE_STREAM_RULES = {
   },
 
   live_demo: {
-    acceptEvents: ["router"],
+    acceptEvents: ["assign_task"],
     hideIntermediateAssistants: false,
   },
 };
@@ -42,6 +42,7 @@ export default function workSpaceLayout() {
   const location = useLocation();
   const navigate = useNavigate();
   const chatBodyRef = React.useRef(null);
+  const [assignTask, setAssignTask] = useState(false);
   const [assistantId, setAssistantId] = React.useState(DEFAULT_ASSISTANT_ID);
   const [showAssistantChooser, setShowAssistantChooser] = React.useState(false);
   const [isLeftCollapsed, setIsLeftCollapsed] = React.useState(false);
@@ -231,7 +232,7 @@ export default function workSpaceLayout() {
           if (!["messages", "updates"].includes(event)) return;
 
           if (event === 'messages' || event.includes('messages')) {
-            hasResultRef.current = MODULE_STREAM_RULES[assistantId].acceptEvents?.length === 0 || MODULE_STREAM_RULES[assistantId].acceptEvents?.includes(data[1].langgraph_node) || assistantId == 'live_demo'
+            hasResultRef.current = MODULE_STREAM_RULES[assistantId].acceptEvents?.length === 0 || MODULE_STREAM_RULES[assistantId].acceptEvents?.includes(data[1].langgraph_node);
             if (!hasResultRef.current) return;
 
             let aiMessages = data.filter(msg => msg.type === "AIMessageChunk");
@@ -248,7 +249,7 @@ export default function workSpaceLayout() {
               }
 
               const idx = streamedListRef.current.findIndex(m => m.id === msg.id);
-              if (msg.content?.length && msg.content[0].type == 'text') {
+              if (typeof msg.content == 'object' && msg.content?.length && msg.content[0].type == 'text') {
                 if (isToolCallRef.current) {
                   // Find the last assistant message to remove (the one currently streaming)
                   let inner_idx = -1;
@@ -277,14 +278,23 @@ export default function workSpaceLayout() {
                   });
                 }
               }
+
+              if (typeof msg.content == 'string') {
+                setLiveDemoThinking(prev => [...prev, msg.content]);
+              }
+
+              if (assistantId == 'live_demo' && !assignTask) {
+                setAssignTask(true);
+                // setNewStreamingList([...streamedListRef.current]);
+                // setLiveDemoThinking([...streamedDemoListRef.current])
+                // if (streamedDemoListRef.current?.length) {
+                //   setShowDemoSteps(true);
+                //   setIsRightCollapsed(false);
+                // }
+              }
             });
 
             setNewStreamingList([...streamedListRef.current]);
-            setLiveDemoThinking([...streamedDemoListRef.current])
-            if (streamedDemoListRef.current?.length) {
-              setShowDemoSteps(true);
-              setIsRightCollapsed(false);
-            }
 
           }
           else {
@@ -318,6 +328,7 @@ export default function workSpaceLayout() {
           setSearchedMessages([]);
           setChatIsLoading(false);
           setStreamSandboxUrl('');
+          setAssignTask(false);
           hasResultRef.current = false;
           setContainerId('')
           if (initialMessage) {
@@ -505,6 +516,7 @@ export default function workSpaceLayout() {
     setLiveDemoThinking([]);
     setShowDemoSteps(false);
     setIsRightCollapsed(true);
+    setAssignTask(false)
   }
 
   useEffect(() => {
@@ -591,6 +603,7 @@ export default function workSpaceLayout() {
             handleSubmit={handleSubmit}
             assistantSuggestions={assistantSuggestions}
             currentAssistantId={assistantId}
+            assignTask={assignTask}
             // activeModule={assistantId}
             onAssistantSuggestionSelect={handleAssistantSuggestionSelect}
             shouldShowAssistantSuggestions={shouldShowAssistantSuggestions}

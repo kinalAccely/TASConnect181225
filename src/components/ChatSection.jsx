@@ -1,4 +1,5 @@
 import React, { useState, useMemo, useRef, useEffect, useCallback } from "react";
+import { streamLiveScreen } from "../services/threadService";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from 'remark-gfm';
 import { useLocation } from "react-router-dom";
@@ -74,6 +75,7 @@ export default function ChatSection({
   newStreamingList,
   onStop,
   onEditMessage,
+  assignTask,
   sandboxUrl,
   onAssistantSuggestionSelect,
   threadId,
@@ -92,6 +94,10 @@ export default function ChatSection({
     }
   }, [sandboxUrl])
   const [updateEventKey, setUpdateEventKey] = useState([]);
+  const [showLiveScreen, setShowLiveScreen] = useState(false);
+  const [liveImageSrc, setLiveImageSrc] = useState(null);
+  const liveScreenConnectedRef = useRef(false);
+
   const normalizeSandboxUrl = (url) => {
     if (typeof url !== "string" || !url.trim()) return null;
     const trimmed = url.trim();
@@ -488,6 +494,9 @@ export default function ChatSection({
 
   // Reset scroll state when thread changes
   useEffect(() => {
+    setShowLiveScreen(false);
+    setLiveImageSrc(null);
+    liveScreenConnectedRef.current = false;
     isAtBottomRef.current = true;
     setShowScrollBottomButton(false);
     setShowScrollTopButton(false);
@@ -532,6 +541,43 @@ export default function ChatSection({
       setShowScrollTopButton(!isTop);
     }
   };
+
+  /* ---------- LIVE DEMO EFFECTS ---------- */
+  // 1. Detect assign_task node
+  useEffect(() => {
+    if (activeModule?.id === 'live_demo' && !liveScreenConnectedRef.current) {
+      setShowLiveScreen(true);
+      liveScreenConnectedRef.current = true;
+    }
+  }, [assignTask, activeModule]);
+
+  // 2. Handle SSE Connection
+  // 2. Handle SSE Connection
+  useEffect(() => {
+    const abortController = new AbortController();
+
+    if (showLiveScreen && threadId) {
+      console.log(`Connecting to live screen: /live/${threadId}/live_screen`);
+
+      streamLiveScreen({
+        threadId,
+        signal: abortController.signal,
+        onFrame: (data) => {
+          if (data.frame) {
+            setLiveImageSrc(`data:image/jpeg;base64,${data.frame}`);
+          }
+        },
+        onError: (err) => {
+          console.error("Live screen SSE error:", err);
+        }
+      });
+    }
+
+    return () => {
+      console.log("Closing live screen connection");
+      abortController.abort();
+    };
+  }, [showLiveScreen, threadId]);
 
   const handleSelectModule = (module) => {
     setActiveModule(module);
@@ -897,7 +943,21 @@ export default function ChatSection({
           })}
 
 
-          {sandboxUrlLink && activeModule?.id == 'live_demo' && !isStreamNewChat && isLoading && (
+
+          {/* LIVE SCREEN (MJPEG) */}
+          {showLiveScreen && liveImageSrc && (
+            <div className="w-full h-[400px] border border-zinc-200 rounded-2xl overflow-hidden shadow-sm flex items-center justify-center bg-black">
+              <img
+                src={liveImageSrc}
+                alt="Live Screen"
+                className="w-full h-full object-contain"
+              // Initial placeholder or loader could go here
+              />
+            </div>
+          )}
+
+          {/* SANDBOX IFRAME (Fallback/Pre-Live) */}
+          {(!showLiveScreen || !liveImageSrc) && sandboxUrlLink && activeModule?.id == 'live_demo' && !isStreamNewChat && isLoading && (
             <div className="w-full h-[400px] border border-zinc-200 rounded-2xl overflow-hidden shadow-sm">
               <iframe
                 src={normalizeSandboxUrl(sandboxUrlLink)}

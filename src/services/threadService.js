@@ -132,6 +132,54 @@ export async function getStreamMessages({
   }
 }
 
+export async function streamLiveScreen({
+  threadId,
+  onFrame,
+  onError,
+  signal,
+}) {
+  if (!threadId) return;
+  const token = getAccessToken();
+  const url = `${normalizeBaseUrl(API_BASE_URL)}/live/${threadId}/live_screen`;
+
+  try {
+    const rawRes = await fetch(url, {
+      method: "GET",
+      headers: {
+        Accept: "text/event-stream",
+        "Authorization": `Bearer ${token}`
+      },
+      signal,
+    });
+    const res = handleAuthError(rawRes);
+
+    if (!res.body) {
+      throw new Error("ReadableStream not supported");
+    }
+
+    const reader = res.body.getReader();
+    const decoder = new TextDecoder("utf-8");
+    let buffer = "";
+
+    while (true) {
+      const { value, done } = await reader.read();
+      if (done) break;
+
+      buffer += decoder.decode(value, { stream: true });
+
+      buffer = parseSSE(buffer, (event, data) => {
+        if (data && onFrame) {
+          onFrame(data);
+        }
+      });
+    }
+  } catch (err) {
+    if (err.name !== "AbortError") {
+      onError?.(err);
+    }
+  }
+}
+
 function parseSSE(buffer, onEvent) {
   const events = buffer.split("\n\n");
   const incomplete = events.pop();
