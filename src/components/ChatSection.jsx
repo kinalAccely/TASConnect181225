@@ -2,17 +2,6 @@ import React, { useState, useMemo, useRef, useEffect, useCallback } from "react"
 import ReactMarkdown from "react-markdown";
 import remarkGfm from 'remark-gfm';
 import { useLocation } from "react-router-dom";
-import {
-  Document,
-  Packer,
-  Paragraph,
-  Header,
-  Footer,
-  ImageRun,
-  TextRun,
-  AlignmentType,
-  PageNumber,
-} from "docx";
 
 import {
   IoSend,
@@ -435,7 +424,7 @@ export default function ChatSection({
   useEffect(() => {
     if (currentAssistantId) {
       const matched = slashOptions.find(opt => opt.id === currentAssistantId);
-      if (matched && matched.id !== "live_demo") {
+      if (matched) {
         setActiveModule(matched);
       }
     }
@@ -545,9 +534,7 @@ export default function ChatSection({
   };
 
   const handleSelectModule = (module) => {
-    if (module.id != 'live_demo') {
-      setActiveModule(module);
-    }
+    setActiveModule(module);
     onAssistantSuggestionSelect?.(module);
     onInputChange("");
   };
@@ -713,11 +700,11 @@ export default function ChatSection({
                 <div className="col-span-1 md:col-span-4 row-span-2 relative overflow-hidden rounded-3xl border border-white/20 bg-white/40 backdrop-blur-md shadow-xl p-8 flex flex-col justify-between items-center text-center group">
                   <div className="absolute inset-0 bg-gradient-to-br from-white/40 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500"></div>
                   <div className="flex flex-col items-center">
-                    <div className="inline-flex items-center justify-center p-3 rounded-2xl bg-gradient-to-br from-[var(--brand)] to-purple-600 text-white mb-6 shadow-lg transform group-hover:scale-110 transition-transform duration-300">
+                    <div className="inline-flex items-center justify-center p-3 rounded-2xl bg-gradient-to-br from-[#ff6b35] to-[#f23c39] text-white mb-6 shadow-lg transform group-hover:scale-110 transition-transform duration-300">
                       <IoSparklesOutline size={24} />
                     </div>
                     <h2 className="text-3xl font-bold tracking-tight text-zinc-800 leading-tight">
-                      Hi I'm <span className="bg-gradient-to-r from-[#f23c39] via-[#8b5cf6] to-[#06b6d4] bg-clip-text text-transparent">TASC</span> <span className="bg-gradient-to-r from-[#ff6b35] via-[#ff8c42] to-[#1a1a1a] bg-clip-text text-transparent font-semibold">Iris</span>
+                      Hi I'm <span className="bg-gradient-to-r from-[#ff6b35] via-[#f23c39] to-[#e11d48] bg-clip-text text-transparent font-bold">TASC</span> <span className="bg-gradient-to-r from-[#f23c39] via-[#ff6b35] to-[#ff8c42] bg-clip-text text-transparent font-bold">Iris</span>
                     </h2>
                     <div className="mt-8 space-y-4 text-zinc-600 leading-relaxed text-sm max-w-2xl mx-auto">
                       <p>

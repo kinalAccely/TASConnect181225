@@ -4,7 +4,7 @@ import ChatSection from "./components/ChatSection.jsx";
 import RightSidebar from "./components/RightSidebar.jsx";
 import TopHeader from "./components/TopHeader.jsx";
 import { resolveAssistantId, fetchThreadById, getStreamMessages, createThread, threadHistory, stopStream, cancelRun, cleanupContainer, getArtifact } from "./services/threadService.js";
-import ComingSoonModal from "./components/ComingSoonModal.jsx";
+
 import { useLocation, useNavigate, useParams } from "react-router-dom";
 
 const DEFAULT_ASSISTANT_ID = resolveAssistantId();
@@ -70,7 +70,7 @@ export default function workSpaceLayout() {
 
   const [containerId, setContainerId] = useState('');
   const [showDemoSteps, setShowDemoSteps] = useState('');
-  const [showComingSoon, setShowComingSoon] = useState(false);
+
 
   useEffect(() => {
     if (customStates === 'completed') {
@@ -370,6 +370,16 @@ export default function workSpaceLayout() {
     if (loadHistoryToggle.includes("load")) {
       threadHistory(threadChatId).then(async (response) => {
         if (cancelled) return;
+
+        // Fetch thread details to get assistant_id and set it
+        fetchThreadById(threadChatId).then((thread) => {
+          if (thread && !cancelled) {
+            const threadAssistantId = thread.metadata?.assistant_id || thread.assistant_id || 'agent';
+            console.log("Setting assistant ID to:", threadAssistantId);
+            setAssistantId(thread.metadata?.graph_id);
+          }
+        }).catch(err => console.error("Failed to fetch thread details:", err));
+
         setInput('');
         setSearchedText('');
         const historyMessages = Array.isArray(response) ? response : [];
@@ -542,10 +552,7 @@ export default function workSpaceLayout() {
 
   const handleAssistantSuggestionSelect = (response) => {
     console.log(response);
-    if (response.id === resolveAssistantId("live_demo") || response.label === "Live Demo") {
-      setShowComingSoon(true);
-      return;
-    }
+
     setAssistantId(response.id);
   }
 
@@ -584,11 +591,11 @@ export default function workSpaceLayout() {
             handleSubmit={handleSubmit}
             assistantSuggestions={assistantSuggestions}
             currentAssistantId={assistantId}
-            activeModule={assistantId}
+            // activeModule={assistantId}
             onAssistantSuggestionSelect={handleAssistantSuggestionSelect}
             shouldShowAssistantSuggestions={shouldShowAssistantSuggestions}
             threadId={threadChatId}
-            onShowComingSoon={() => setShowComingSoon(true)}
+
           />
 
           <RightSidebar
@@ -603,7 +610,7 @@ export default function workSpaceLayout() {
           />
         </div>
       </div>
-      <ComingSoonModal isOpen={showComingSoon} onClose={() => setShowComingSoon(false)} />
+
     </div>
   );
 
