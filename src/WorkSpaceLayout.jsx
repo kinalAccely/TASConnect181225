@@ -553,7 +553,31 @@ export default function workSpaceLayout() {
   }, [loadHistoryToggle]);
 
 
+  const handleStreamStop = () => {
+    console.trace("handleStreamStop called"); // Trace usage
+    setChatIsLoading(false);
+    const subscription = cancelRun(threadChatId, runId).subscribe({
+      next: (res) => {
+        console.log("Stream stopped:", res);
+        subscription.unsubscribe();
+      },
+      error: (err) => {
+        console.error("Failed to stop stream:", err);
+      }
+    });
+    const subscriptionCleanUp = cleanupContainer(containerId).subscribe({
+      next: (res) => {
+        console.log("Stream stopped:", res);
+        subscriptionCleanUp.unsubscribe();
+      },
+      error: (err) => {
+        console.error("Failed to stop stream:", err);
+      }
+    });
+  }
+
   const openNewChat = () => {
+    handleStreamStop();
     streamedListRef.current = [];
     setIsStreamNewChat(true);
     setInput('');
@@ -595,28 +619,7 @@ export default function workSpaceLayout() {
     setSearchedText(input);
   }
 
-  const handleStreamStop = () => {
-    console.trace("handleStreamStop called"); // Trace usage
-    setChatIsLoading(false);
-    const subscription = cancelRun(threadChatId, runId).subscribe({
-      next: (res) => {
-        console.log("Stream stopped:", res);
-        subscription.unsubscribe();
-      },
-      error: (err) => {
-        console.error("Failed to stop stream:", err);
-      }
-    });
-    const subscriptionCleanUp = cleanupContainer(containerId).subscribe({
-      next: (res) => {
-        console.log("Stream stopped:", res);
-        subscriptionCleanUp.unsubscribe();
-      },
-      error: (err) => {
-        console.error("Failed to stop stream:", err);
-      }
-    });
-  }
+
 
   const handleAssistantSuggestionSelect = (response) => {
     console.log(response);
@@ -667,18 +670,20 @@ export default function workSpaceLayout() {
 
           />
 
-          <RightSidebar
-            isCollapsed={isRightCollapsed}
-            theme='light'
-            isThinking={chatIsLoading}
-            liveDemoMessages={liveDemoThinking}
-            liveDemoTodos={liveDemoTodos} // Pass Todos
-            usedTools={usedTools}
-            onToggleCollapse={toggleRightCollapse}
-            showDemoSteps={showDemoSteps}
-          // toolOutputs={toolOutputs}
-          // sources={sources}
-          />
+          {assistantId === 'live_demo' && (
+            <RightSidebar
+              isCollapsed={isRightCollapsed}
+              theme='light'
+              isThinking={chatIsLoading}
+              liveDemoMessages={liveDemoThinking}
+              liveDemoTodos={liveDemoTodos} // Pass Todos
+              usedTools={usedTools}
+              onToggleCollapse={toggleRightCollapse}
+              showDemoSteps={showDemoSteps}
+            // toolOutputs={toolOutputs}
+            // sources={sources}
+            />
+          )}
         </div>
       </div>
 

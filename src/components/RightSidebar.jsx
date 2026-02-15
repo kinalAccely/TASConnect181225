@@ -315,19 +315,31 @@ export default function RightSidebar({
             </div>
           )}
 
-          {/* {sources.map((source, index) => (
-            <div
-              key={source?.__key ?? source?.id ?? `${index}`}
-              className="group flex flex-col gap-1 rounded-xl border border-zinc-100 bg-white p-2.5 shadow-[0_2px_8px_-3px_rgba(0,0,0,0.05)] hover:shadow-md hover:border-zinc-200 transition-all duration-300"
-            >
-              <div className="flex items-center justify-between">
-                <span className="text-[10px] font-medium text-zinc-600 line-clamp-1">{resolveSourceTitle(source, index)}</span>
-                <span className="text-[8px] font-bold uppercase tracking-wider text-zinc-300 bg-zinc-50 px-1.5 py-0.5 rounded-full">
-                  #{index + 1}
-                </span>
-              </div>
+          {/* LIVE DEMO MESSAGES (THINKING) */}
+          {liveDemoMessages.length > 0 && (
+            <div className="flex flex-col gap-3 mt-4">
+              {liveDemoMessages
+                .filter(msg => msg.role === 'assistant')
+                .map((msg, index) => (
+                  <div
+                    key={msg.id || index}
+                    className="group flex flex-col gap-2 rounded-xl border border-zinc-100 bg-white p-4 shadow-sm hover:shadow-md transition-all duration-300"
+                  >
+                    <div className="flex items-center gap-2 mb-1">
+                      <div className="w-1.5 h-1.5 rounded-full bg-[var(--brand)] animate-pulse" />
+                      <span className="text-[10px] font-bold uppercase tracking-wider text-zinc-400">
+                        Thinking Process
+                      </span>
+                    </div>
+                    <div className="text-xs text-zinc-700 leading-relaxed prose prose-zinc max-w-none prose-p:my-1 prose-headings:my-2 prose-code:text-[10px]">
+                      <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                        {typeof msg.content === 'string' ? msg.content : JSON.stringify(msg.content)}
+                      </ReactMarkdown>
+                    </div>
+                  </div>
+                ))}
             </div>
-          ))} */}
+          )}
         </div>
       )}
     </>

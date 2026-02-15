@@ -846,7 +846,7 @@ export default function ChatSection({
 
             // If it's a tool result, specific instructions say "wrap or remove". 
             // We'll hide raw tool results from the main stream to declutter.
-            if (isToolResult) {
+            if (isToolResult || (isLiveDemo && !isUser)) {
               return null;
             }
 
