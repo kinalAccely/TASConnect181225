@@ -33,7 +33,7 @@ const MODULE_STREAM_RULES = {
   },
 
   live_demo: {
-    acceptEvents: ["assign_task"],
+    acceptEvents: ["planner", "assign_task"],
     hideIntermediateAssistants: false,
   },
 };
@@ -55,19 +55,22 @@ export default function workSpaceLayout() {
   const hasResultRef = useRef(false);
   const streamedListRef = useRef([]);
   const streamedDemoListRef = useRef([]);
+  const streamedPlannerTodosRef = useRef([]); // New ref for Todos
   const [chatIsLoading, setChatIsLoading] = useState(false);
   const [isStreamNewChat, setIsStreamNewChat] = useState(true);
   const [loadHistoryToggle, setLoadHistoryToggle] = useState("load");
   const initialMessage = location.state?.initialMessage;
   const state_assistant_id = location.state?.assistant_id || location.state?.assistantId || 'agent';
   const loadHistory = location.state?.loadHistory || location.state?.loadHistory || '';
-  const [streamSandboxUrl, setStreamSandboxUrl] = useState('');
   const [selectedThreadChatId, setThreadChatId] = useState('');
   const [customStates, setCustomStates] = useState('');
   const [runId, setRunId] = useState('');
   const [liveDemoThinking, setLiveDemoThinking] = useState([]);
+  const [liveDemoTodos, setLiveDemoTodos] = useState([]); // New state for Todos
   const [reloadThread, setReloadThread] = useState('')
   const [toolCalls, setToolCalls] = useState([])
+  const [usedTools, setUsedTools] = useState([]);
+  const usedToolsRef = useRef([]);
   const isToolCallRef = useRef(false);
 
   const [containerId, setContainerId] = useState('');
@@ -192,12 +195,14 @@ export default function workSpaceLayout() {
   //   }
   // }, [state_assistant_id]);
 
+  const startNewLineRef = useRef(true);
   useEffect(() => {
     if (!threadChatId || searchedText.length === 0) return;
     setRunId('');
     setInput('');
     setLoadHistoryToggle("");
     streamedDemoListRef.current = [];
+    streamedPlannerTodosRef.current = []; // Reset Todos ref
     streamedListRef.current.push({
       id: `user-${Date.now()}`,
       role: "user",
@@ -251,96 +256,123 @@ export default function workSpaceLayout() {
 
               const idx = streamedListRef.current.findIndex(m => m.id === msg.id);
               if (typeof msg.content == 'object' && msg.content?.length && msg.content[0].type == 'text') {
-                if (isToolCallRef.current) {
-                  // Find the last assistant message to remove (the one currently streaming)
-                  let inner_idx = -1;
-                  for (let i = streamedListRef.current.length - 1; i >= 0; i--) {
-                    if (streamedListRef.current[i].role === "assistant") {
-                      inner_idx = i;
-                      break;
+                if (assistantId == 'agent') {
+                  if (isToolCallRef.current) {
+                    // Find the last assistant message to remove (the one currently streaming)
+                    let inner_idx = -1;
+                    for (let i = streamedListRef.current.length - 1; i >= 0; i--) {
+                      if (streamedListRef.current[i].role === "assistant") {
+                        inner_idx = i;
+                        break;
+                      }
                     }
+
+                    if (inner_idx != -1) {
+                      streamedListRef.current.splice(inner_idx, 1);
+                    }
+                    setNewStreamingList([...streamedListRef.current]);
+                    isToolCallRef.current = false;
                   }
-
-                  if (inner_idx != -1) {
-                    streamedListRef.current.splice(inner_idx, 1);
-                  }
-                  setNewStreamingList([...streamedListRef.current]);
-                  isToolCallRef.current = false;
-                }
-                if (idx !== -1) {
-                  streamedListRef.current[idx].content += msg.content[0].text;
-                }
-                else {
-                  streamedListRef.current.push({
-                    id: msg.id,
-                    role: "assistant", // "ai" -> "assistant"
-                    content: msg.content[0].text,
-                    langgraph_node: data[1].langgraph_node // ✅ stored here
-                  });
-                }
-              }
-
-              // LIVE DEMO: Capture executor thoughts
-              if (assistantId === 'live_demo' && event.includes('call_executor_subgraph')) {
-                // Extract text from content array
-                let text = "";
-                if (Array.isArray(msg.content)) {
-                  text = msg.content
-                    .filter(c => c.type === 'text')
-                    .map(c => c.text || "")
-                    .join("");
-                } else if (typeof msg.content === 'string') {
-                  text = msg.content;
-                }
-
-                if (text) {
-                  const idx = streamedDemoListRef.current.findIndex(m => m.id === msg.id);
                   if (idx !== -1) {
-                    streamedDemoListRef.current[idx].content += text;
-                  } else {
-                    streamedDemoListRef.current.push({
+                    streamedListRef.current[idx].content += msg.content[0].text;
+                  }
+                  else {
+                    streamedListRef.current.push({
                       id: msg.id,
-                      role: "assistant",
-                      content: text
+                      role: "assistant", // "ai" -> "assistant"
+                      content: msg.content[0].text,
+                      langgraph_node: data[1].langgraph_node // ✅ stored here
                     });
                   }
 
-                  setLiveDemoThinking([...streamedDemoListRef.current]);
-                  setShowDemoSteps(true);
-                  setIsRightCollapsed(false);
+                  setNewStreamingList([...streamedListRef.current]);
+                }
+                else {
+                  if (isToolCallRef.current) {
+                    if (msg.content?.length) {
+                      startNewLineRef.current = true;
+                      isToolCallRef.current = false;
+                    }
+                  }
+
+                  else {
+                    if (!streamedListRef.current?.length) {
+                      streamedListRef.current.push({
+                        id: msg.id,
+                        role: "assistant", // "ai" -> "assistant"
+                        content: msg.content[0].text,
+                        langgraph_node: data[1].langgraph_node // ✅ stored here
+                      });
+                    }
+                    else {
+                      const lastMsg = streamedListRef.current[streamedListRef.current.length - 1];
+                      if (startNewLineRef.current || (lastMsg && lastMsg.role !== 'assistant')) {
+                        streamedListRef.current.push({
+                          id: msg.id,
+                          role: "assistant", // "ai" -> "assistant"
+                          content: msg.content[0].text,
+                          langgraph_node: data[1].langgraph_node // ✅ stored here
+                        });
+                        startNewLineRef.current = false; // Reset flag if we forced a new line due to role mismatch
+                      } else {
+                        streamedListRef.current[streamedListRef.current.length - 1].content += msg.content[0].text;
+                      }
+                    }
+                    startNewLineRef.current = false;
+                  }
+                  console.log(streamedListRef.current);
+                  setLiveDemoThinking([...streamedListRef.current])
                 }
               }
 
 
 
-              if (assistantId == 'live_demo' && !assignTask) {
+              if (assistantId == 'live_demo' && !assignTask && data[1].langgraph_node == 'assign_task') {
                 setAssignTask(true);
-                // setNewStreamingList([...streamedListRef.current]);
-                // setLiveDemoThinking([...streamedDemoListRef.current])
-                // if (streamedDemoListRef.current?.length) {
-                //   setShowDemoSteps(true);
-                //   setIsRightCollapsed(false);
-                // }
               }
             });
 
-            setNewStreamingList([...streamedListRef.current]);
+
 
           }
           else {
             if (event === 'updates' || event.includes('updates')) {
               let obj = Object.keys(data);
+
+              if (obj[0] === 'planner' && data['planner']?.todos) {
+                data['planner'].todos.forEach((todo) => {
+                  const content = todo.content || todo;
+                  streamedPlannerTodosRef.current.push({
+                    id: `planner-${Date.now()}-${Math.random()}`,
+                    role: "assistant",
+                    content: content
+                  });
+                });
+                setLiveDemoTodos([...streamedPlannerTodosRef.current]); // Update Todos State
+                setShowDemoSteps(true); // Maybe keep this to show sidebar?
+                setIsRightCollapsed(false);
+              }
+
               data[obj[0]]?.messages?.forEach((msg) => {
                 if (msg.tool_calls && msg.tool_calls.length > 0) {
-                  if (msg.content) {
-                    setToolMessages(prev => [
-                      ...prev,
-                      Array.isArray(msg.content) ? msg.content.map((c) => c.text || "").join("") : msg.content
-                    ]);
-                  }
+                  msg.tool_calls.forEach((tool) => {
+                    const toolName = tool.function?.name || tool.name;
+                    const toolId = tool.id || `tool-${Date.now()}-${Math.random()}`;
+                    if (toolName) {
+                      // Avoid duplicates if needed, or just push all
+                      usedToolsRef.current.push({
+                        id: toolId,
+                        name: toolName,
+                        args: tool.function?.arguments || tool.args,
+                        timestamp: Date.now()
+                      });
+                    }
+                  });
+                  setUsedTools([...usedToolsRef.current]);
+                  // Also ensure sidebar is open if tools are being used? 
+                  // setIsRightCollapsed(false); 
                 }
               });
-              console.log(toolMessages);
             }
 
           }
@@ -350,7 +382,6 @@ export default function workSpaceLayout() {
           setSearchedText('');
           setSearchedMessages([]);
           setChatIsLoading(false);
-          setStreamSandboxUrl('');
           setAssignTask(false);
           hasResultRef.current = false;
           setContainerId('')
@@ -425,7 +456,6 @@ export default function workSpaceLayout() {
         const LiveDemoAssistantMessages = [];
 
         const msg_values = historyMessages[0]?.values?.messages;
-        setStreamSandboxUrl(historyMessages[0]?.values?.sandbox_url)
 
         const processedMessages = await Promise.all(
           (msg_values || []).map(async (msg) => {
@@ -483,19 +513,21 @@ export default function workSpaceLayout() {
                 };
               }
             } else {
+              let content = typeof msg.content == 'string' ? msg.content : (Array.isArray(msg.content) && msg.content.length > 0 && msg.content[0].type === 'text' ? msg.content[0].text : JSON.stringify(msg.content));
+
               if (msg.type == 'human') {
                 return {
                   id: msg.id,
                   type: 'demo',
                   role: msg.type === "human" ? "user" : "assistant",
-                  content: msg.content,
+                  content: content,
                   video_url: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4'
                 };
               } else {
                 LiveDemoAssistantMessages.push({
                   id: msg.id,
                   role: msg.type === "human" ? "user" : "assistant",
-                  content: msg.content,
+                  content: content,
                 });
                 return null;
               }
@@ -505,13 +537,6 @@ export default function workSpaceLayout() {
         );
 
         const filteredMessages = processedMessages.flat().filter(Boolean);
-        // Handle Live Demo Logic Separation
-        // The original code pushed to filteredMessages OR LiveDemoAssistantMessages. 
-        // My map returns objects for filteredMessages (agent) or demo-user messages. 
-        // LiveDemo assistant messages are pushed to LiveDemoAssistantMessages as side effect inside map.
-
-        console.log(filteredMessages);
-
         streamedListRef.current = filteredMessages;
         setLiveDemoThinking(LiveDemoAssistantMessages);
         setNewStreamingList(streamedListRef.current);
@@ -538,12 +563,15 @@ export default function workSpaceLayout() {
     setSearchedText('');
     setAssistantId('agent');
     setReloadThread(true);
-    setStreamSandboxUrl('');
     setThreadChatId('');
     setLiveDemoThinking([]);
+    setLiveDemoTodos([]); // Reset Todos
+    setUsedTools([]);
+    usedToolsRef.current = [];
     setShowDemoSteps(false);
     setIsRightCollapsed(true);
-    setAssignTask(false)
+    setAssignTask(false);
+    setDoneBrowser(false);
   }
 
   useEffect(() => {
@@ -568,6 +596,7 @@ export default function workSpaceLayout() {
   }
 
   const handleStreamStop = () => {
+    console.trace("handleStreamStop called"); // Trace usage
     setChatIsLoading(false);
     const subscription = cancelRun(threadChatId, runId).subscribe({
       next: (res) => {
@@ -621,7 +650,6 @@ export default function workSpaceLayout() {
             toolCalls={toolCalls}
             isLoading={chatIsLoading}
             isStreamNewChat={isStreamNewChat}
-            sandboxUrl={streamSandboxUrl}
             customStates={customStates}
             onCopy={handleCopy}
             onDownload={handleDownload}
@@ -644,6 +672,8 @@ export default function workSpaceLayout() {
             theme='light'
             isThinking={chatIsLoading}
             liveDemoMessages={liveDemoThinking}
+            liveDemoTodos={liveDemoTodos} // Pass Todos
+            usedTools={usedTools}
             onToggleCollapse={toggleRightCollapse}
             showDemoSteps={showDemoSteps}
           // toolOutputs={toolOutputs}

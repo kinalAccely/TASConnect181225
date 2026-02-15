@@ -583,16 +583,16 @@ export default function ChatSection({
     onInputChange("");
   };
 
-  // Reset live demo when assignTask becomes false
+  // Reset live demo when assignTask becomes false OR isLoading is false
   useEffect(() => {
-    if (!assignTask && showLiveScreen) {
+    if ((!assignTask || !isLoading) && showLiveScreen) {
       // Don't remove the screen, just the status
       // setShowLiveScreen(false);
       // setLiveImageSrc(null);
       setIsLiveConnected(false);
       liveScreenConnectedRef.current = false;
     }
-  }, [assignTask, showLiveScreen]);
+  }, [assignTask, showLiveScreen, isLoading]);
 
 
 
@@ -990,7 +990,8 @@ export default function ChatSection({
           )} */}
 
 
-          {isLoading && newStreamingList.length > 0 && activeModule?.id != 'live_demo' && (
+
+          {isLoading && newStreamingList.length > 0 && (
             <div className="flex justify-start">
               <div className="group flex items-center justify-between gap-4 w-full max-w-sm rounded-xl border border-zinc-200/50 bg-white/90 backdrop-blur-sm px-6 py-4 shadow-[0_4px_20px_-2px_rgba(0,0,0,0.05)] animate-in fade-in slide-in-from-bottom-2 duration-300 transition-all hover:bg-white">
                 <div className="flex w-full items-center justify-between relative">
@@ -1044,7 +1045,7 @@ export default function ChatSection({
                       </div>
                       <div className="flex flex-col">
                         <span className="text-[10px] font-bold uppercase tracking-wider text-zinc-400">Status</span>
-                        <span className="text-xs font-semibold text-zinc-700">Processing Request...</span>
+                        <span className="text-xs font-semibold text-zinc-700">Thinking...</span>
                       </div>
                     </div>
                   )}
