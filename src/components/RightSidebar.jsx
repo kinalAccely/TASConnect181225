@@ -1,7 +1,7 @@
 import React, { useEffect, useState, useRef } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from 'remark-gfm';
-import { IoChevronBack, IoChevronForward } from "react-icons/io5";
+import { IoChevronBack, IoChevronForward, IoCheckmark } from "react-icons/io5";
 import { FileText } from "lucide-react";
 import { useAuth } from "../contexts/AuthContext";
 
@@ -78,6 +78,22 @@ export default function RightSidebar({
 }) {
   const { user } = useAuth();
   const planEndRef = useRef(null);
+  const scrollContainerRef = useRef(null);
+  const isUserAtBottomRef = useRef(true);
+
+  const handleScroll = () => {
+    if (scrollContainerRef.current) {
+      const { scrollTop, scrollHeight, clientHeight } = scrollContainerRef.current;
+      const isBottom = scrollHeight - scrollTop - clientHeight < 50;
+      isUserAtBottomRef.current = isBottom;
+    }
+  };
+
+  useEffect(() => {
+    if (isUserAtBottomRef.current && scrollContainerRef.current) {
+      scrollContainerRef.current.scrollTop = scrollContainerRef.current.scrollHeight;
+    }
+  }, [liveDemoMessages]);
 
   useEffect(() => {
     if (liveDemoTodos.length > 0 && planEndRef.current) {
@@ -200,7 +216,11 @@ export default function RightSidebar({
       </div>
 
       {showDemoSteps ? (
-        <div className="flex flex-col gap-4 overflow-y-auto pr-2 pb-4 scrollbar-thin scrollbar-thumb-zinc-200 scrollbar-track-transparent">
+        <div
+          ref={scrollContainerRef}
+          onScroll={handleScroll}
+          className="flex flex-col gap-4 overflow-y-auto pr-2 pb-4 scrollbar-thin scrollbar-thumb-zinc-200 scrollbar-track-transparent"
+        >
 
           {/* PLAN / TODOS SECTION */}
           {liveDemoTodos.length > 0 && (
@@ -249,44 +269,76 @@ export default function RightSidebar({
             </div>
           ))} */}
           {hasDemoMessages && (
-            <div className="flex flex-col gap-3 animate-in fade-in slide-in-from-bottom-4 duration-500 delay-150">
-              <div className="flex items-center gap-2 px-1 mt-1">
+            <div className="flex flex-col gap-0 mt-4 pl-2 animate-in fade-in slide-in-from-bottom-4 duration-500 delay-150">
+              <div className="flex items-center gap-2 px-1 mt-1 mb-3">
                 <div className="h-1.5 w-1.5 rounded-full bg-zinc-300"></div>
                 <span className="text-[9px] font-bold uppercase tracking-widest text-zinc-400">Log</span>
               </div>
 
-              <div className="flex flex-col gap-2">
-                {liveDemoMessages.map((message) => (
-                  <div
-                    key={message.id}
-                    className={`group relative flex flex-col gap-1.5 rounded-xl border px-3 py-2.5 transition-all duration-300 hover:shadow-md ${message.isUser
-                      ? "border-[var(--brand-light)] bg-[var(--brand-lighter)] text-zinc-800 ml-4"
-                      : "border-zinc-100 bg-white text-zinc-600 mr-1"
-                      }`}
-                  >
-                    <div className="flex items-center justify-between opacity-60 group-hover:opacity-100 transition-opacity">
-                      <span className={`text-[8px] font-bold uppercase tracking-[0.2em] ${message.isUser ? "text-[var(--brand)]" : "text-zinc-400"
-                        }`}>
-                        {message.role === 'user' ? 'You' : 'Preview'}
-                      </span>
-                    </div>
-                    <div className="text-[11px] leading-relaxed break-words">
-                      <ReactMarkdown
-                        remarkPlugins={[remarkGfm]}
-                        components={markdownComponents}
-                        className="prose prose-zinc max-w-none prose-p:my-0 prose-headings:my-1 prose-ul:my-1 prose-li:my-0"
-                      >
-                        {message.content}
-                      </ReactMarkdown>
-                    </div>
-                  </div>
-                ))}
+              <div className="flex flex-col relative">
+                {liveDemoMessages
+                  .filter(msg => msg.role === 'assistant')
+                  .map((message, index, arr) => {
+                    const isLast = index === arr.length - 1;
+                    const status = message.status || 'default'; // 'success', 'error', 'in_progress', 'default'
+
+                    // Determine Icon & Color based on status
+                    let statusColorClass = "border-zinc-200 text-zinc-400";
+                    let Icon = <div className="w-1.5 h-1.5 rounded-full bg-zinc-300" />;
+
+                    if (status === 'success' || status === 'completed') {
+                      statusColorClass = "border-green-200 bg-green-50 text-green-500";
+                      Icon = <IoCheckmark size={12} />;
+                    } else if (status === 'in_progress' || status === 'thinking' || status === 'running') {
+                      statusColorClass = "border-[var(--brand-light)] bg-[var(--brand-lighter)] text-[var(--brand)] animate-pulse";
+                      Icon = <div className="w-1.5 h-1.5 rounded-full bg-[var(--brand)]" />;
+                    } else if (status === 'error' || status === 'failed') {
+                      statusColorClass = "border-red-200 bg-red-50 text-red-500";
+                      Icon = <div className="w-1.5 h-1.5 rounded-full bg-red-500" />;
+                    }
+
+                    return (
+                      <div key={message.id || index} className="relative pl-6 pb-6 last:pb-0">
+                        {/* Timeline Line */}
+                        {!isLast && (
+                          <div className="absolute left-[11px] top-6 bottom-0 w-0.5 bg-zinc-100"></div>
+                        )}
+
+                        {/* Status Icon */}
+                        <div className={`absolute left-0 top-0 w-6 h-6 rounded-full border-2 flex items-center justify-center bg-white z-10 transition-colors duration-300 ${statusColorClass}`}>
+                          {Icon}
+                        </div>
+
+                        {/* Content Card */}
+                        <div className={`group relative flex flex-col gap-1.5 rounded-xl border px-3 py-2.5 transition-all duration-300 hover:shadow-md border-zinc-100 bg-white text-zinc-600`}>
+                          <div className="flex items-center justify-between opacity-60 group-hover:opacity-100 transition-opacity">
+                            <span className="text-[8px] font-bold uppercase tracking-[0.2em] text-zinc-400">
+                              {status === 'in_progress' ? 'Thinking...' : 'Response'}
+                            </span>
+                          </div>
+                          <div className="text-[11px] leading-relaxed break-words">
+                            <ReactMarkdown
+                              remarkPlugins={[remarkGfm]}
+                              components={markdownComponents}
+                              className="prose prose-zinc max-w-none prose-p:my-0 prose-headings:my-1 prose-ul:my-1 prose-li:my-0"
+                            >
+                              {message.content}
+                            </ReactMarkdown>
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
               </div>
             </div>
           )}
         </div>
       ) : (
-        <div className="mt-2 flex max-h-[100vh] flex-col gap-2 overflow-y-auto pr-1 text-[11px]">
+        <div
+          ref={scrollContainerRef}
+          onScroll={handleScroll}
+          className="mt-2 flex max-h-[100vh] flex-col gap-2 overflow-y-auto pr-1 text-[11px]"
+        >
           {/* TOOLS SECTION */}
           {usedTools.length > 0 && (
             <div className="flex flex-col gap-2 mb-4">
@@ -347,7 +399,7 @@ export default function RightSidebar({
 
   return (
     <div
-      className={`relative flex h-full min-h-0 transition-all duration-300 ease-in-out ${isCollapsed ? "w-20" : "w-64"
+      className={`relative flex h-full min-h-0 transition-all duration-300 ease-in-out ${isCollapsed ? "w-20" : "w-96"
         }`}
     >
       <aside

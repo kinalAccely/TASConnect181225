@@ -66,6 +66,7 @@ export default function ChatSection({
   toolCalls,
   input,
   isLoading,
+  hideLiveScreen,
   customStates,
   handleSubmit,
   isStreamNewChat,
@@ -419,6 +420,9 @@ export default function ChatSection({
   }, []);
 
 
+  useEffect(() => {
+    setShowLiveScreen(false);
+  }, [hideLiveScreen])
 
 
 
@@ -541,17 +545,17 @@ export default function ChatSection({
   // 1. Detect assign_task node
   useEffect(() => {
     if (activeModule?.id === 'live_demo' && !liveScreenConnectedRef.current) {
+      setLiveImageSrc(null); // Clear previous image
       setShowLiveScreen(true);
       liveScreenConnectedRef.current = true;
     }
   }, [assignTask, activeModule]);
 
   // 2. Handle SSE Connection
-  // 2. Handle SSE Connection
   useEffect(() => {
     const abortController = new AbortController();
 
-    if (showLiveScreen && threadId) {
+    if (showLiveScreen && threadId && isLoading) {
       console.log(`Connecting to live screen: /live/${threadId}/live_screen`);
 
       streamLiveScreen({
@@ -559,7 +563,6 @@ export default function ChatSection({
         signal: abortController.signal,
         onFrame: (data) => {
           if (data.frame) {
-            console.log("Live screen frame received", `data:image/jpeg;base64,${data.frame}`);
             setLiveImageSrc(`data:image/jpeg;base64,${data.frame}`);
             setIsLiveConnected(true);
           }
@@ -569,14 +572,14 @@ export default function ChatSection({
           setIsLiveConnected(false);
         }
       });
+      return () => {
+        console.log("Closing live screen connection due to deps change or unmount");
+        console.log("Pending cleanup deps:", { showLiveScreen, threadId });
+        abortController.abort();
+        setIsLiveConnected(false);
+      }
     }
-
-    return () => {
-      console.log("Closing live screen connection");
-      abortController.abort();
-      setIsLiveConnected(false);
-    };
-  }, [showLiveScreen, threadId]);
+  }, [showLiveScreen, threadId, isLoading]);
 
   const handleSelectModule = (module) => {
     setActiveModule(module);
@@ -586,13 +589,12 @@ export default function ChatSection({
 
   // Reset live demo when assignTask becomes false OR isLoading is false
   useEffect(() => {
-    if ((!assignTask || !isLoading) && showLiveScreen) {
+    if (!isLoading) {
+      setIsLiveConnected(false);
       // setShowLiveScreen(false);
       // setLiveImageSrc(null);
-      setIsLiveConnected(false);
-      liveScreenConnectedRef.current = false;
     }
-  }, [assignTask, showLiveScreen, isLoading]);
+  }, [isLoading]);
 
 
 
@@ -844,9 +846,10 @@ export default function ChatSection({
             const hasToolCalls = msg.tool_calls && msg.tool_calls.length > 0;
             const isToolResult = msg.role === 'tool' || msg.type === 'tool';
 
-            // If it's a tool result, specific instructions say "wrap or remove". 
-            // We'll hide raw tool results from the main stream to declutter.
-            if (isToolResult || (isLiveDemo && !isUser)) {
+            // Hide live demo assistant messages unless they are from history OR assign_task is not yet triggered
+            // If assignTask is false, we want to SHOW the message in chat.
+            // So we HIDE if: isLiveDemo AND !isUser AND !isHistory AND assignTask is TRUE.
+            if (isToolResult) {
               return null;
             }
 

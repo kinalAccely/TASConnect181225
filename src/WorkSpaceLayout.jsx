@@ -33,7 +33,7 @@ const MODULE_STREAM_RULES = {
   },
 
   live_demo: {
-    acceptEvents: ["planner", "assign_task"],
+    acceptEvents: ["planner", "assign_task", "executor"],
     hideIntermediateAssistants: false,
   },
 };
@@ -42,6 +42,7 @@ export default function workSpaceLayout() {
   const location = useLocation();
   const navigate = useNavigate();
   const chatBodyRef = React.useRef(null);
+  const [hideLiveScreen, setHideLiveScreen] = useState('')
   const [doneBrowser, setDoneBrowser] = useState(false);
   const [assignTask, setAssignTask] = useState(false);
   const [assistantId, setAssistantId] = React.useState(DEFAULT_ASSISTANT_ID);
@@ -194,12 +195,11 @@ export default function workSpaceLayout() {
   //     setAssistantId(state_assistant_id);
   //   }
   // }, [state_assistant_id]);
-
-  const startNewLineRef = useRef(true);
   useEffect(() => {
     if (!threadChatId || searchedText.length === 0) return;
     setRunId('');
     setInput('');
+
     setLoadHistoryToggle("");
     streamedDemoListRef.current = [];
     streamedPlannerTodosRef.current = []; // Reset Todos ref
@@ -212,7 +212,7 @@ export default function workSpaceLayout() {
     // ✅ Always update UI snapshot
     setNewStreamingList([...streamedListRef.current]);
     setChatIsLoading(true);
-
+    setHideLiveScreen(`Date_${Date.now()}`);
     setTimeout(() => {
       getStreamMessages({
         url: `/threads/${threadChatId}/runs/stream`,
@@ -287,15 +287,49 @@ export default function workSpaceLayout() {
                   setNewStreamingList([...streamedListRef.current]);
                 }
                 else {
-                  if (isToolCallRef.current) {
-                    if (msg.content?.length) {
-                      startNewLineRef.current = true;
+                  if (data[1].langgraph_node == 'executor') {
+                    setLiveDemoThinking(prev => {
+                      const idx = prev.findIndex(m => m.id === msg.id);
+                      if (idx !== -1) {
+                        // Create a new array and new object for immutability
+                        const newArr = [...prev];
+                        newArr[idx] = {
+                          ...newArr[idx],
+                          content: newArr[idx].content + msg.content[0].text
+                        };
+                        return newArr;
+                      } else {
+                        // Append new message
+                        return [...prev, {
+                          id: msg.id,
+                          role: "assistant",
+                          content: msg.content[0].text,
+                          langgraph_node: data[1].langgraph_node
+                        }];
+                      }
+                    });
+                  }
+                  else if (data[1].langgraph_node == 'planner') {
+                    if (isToolCallRef.current) {
+                      // Find the last assistant message to remove (the one currently streaming)
+                      let inner_idx = -1;
+                      for (let i = streamedListRef.current.length - 1; i >= 0; i--) {
+                        if (streamedListRef.current[i].role === "assistant") {
+                          inner_idx = i;
+                          break;
+                        }
+                      }
+
+                      if (inner_idx != -1) {
+                        streamedListRef.current.splice(inner_idx, 1);
+                      }
+                      setNewStreamingList([...streamedListRef.current]);
                       isToolCallRef.current = false;
                     }
-                  }
-
-                  else {
-                    if (!streamedListRef.current?.length) {
+                    if (idx !== -1) {
+                      streamedListRef.current[idx].content += msg.content[0].text;
+                    }
+                    else {
                       streamedListRef.current.push({
                         id: msg.id,
                         role: "assistant", // "ai" -> "assistant"
@@ -303,37 +337,48 @@ export default function workSpaceLayout() {
                         langgraph_node: data[1].langgraph_node // ✅ stored here
                       });
                     }
-                    else {
-                      const lastMsg = streamedListRef.current[streamedListRef.current.length - 1];
-                      if (startNewLineRef.current || (lastMsg && lastMsg.role !== 'assistant')) {
-                        streamedListRef.current.push({
-                          id: msg.id,
-                          role: "assistant", // "ai" -> "assistant"
-                          content: msg.content[0].text,
-                          langgraph_node: data[1].langgraph_node // ✅ stored here
-                        });
-                        startNewLineRef.current = false; // Reset flag if we forced a new line due to role mismatch
-                      } else {
-                        streamedListRef.current[streamedListRef.current.length - 1].content += msg.content[0].text;
-                      }
-                    }
-                    startNewLineRef.current = false;
+                    console.log(streamedListRef.current);
+                    setNewStreamingList([...streamedListRef.current]);
                   }
-                  console.log(streamedListRef.current);
-                  setLiveDemoThinking([...streamedListRef.current])
                 }
               }
+              // if (isToolCallRef.current) {
+              //   if (msg.content?.length) {
+              //     startNewLineRef.current = true;
+              //     isToolCallRef.current = false;
+              //   }
+              // }
 
-
-
-              if (assistantId == 'live_demo' && !assignTask && data[1].langgraph_node == 'assign_task') {
-                setAssignTask(true);
-              }
-            });
-
-
-
+              // else {
+              //   if (!streamedListRef.current?.length) {
+              //     streamedListRef.current.push({
+              //       id: msg.id,
+              //       role: "assistant", // "ai" -> "assistant"
+              //       content: msg.content[0].text,
+              //       langgraph_node: data[1].langgraph_node // ✅ stored here
+              //     });
+              //   }
+              //   else {
+              //     const lastMsg = streamedListRef.current[streamedListRef.current.length - 1];
+              //     if (startNewLineRef.current || (lastMsg && lastMsg.role !== 'assistant')) {
+              //       streamedListRef.current.push({
+              //         id: msg.id,
+              //         role: "assistant", // "ai" -> "assistant"
+              //         content: msg.content[0].text,
+              //         langgraph_node: data[1].langgraph_node // ✅ stored here
+              //       });
+              //       startNewLineRef.current = false; // Reset flag if we forced a new line due to role mismatch
+              //     } else {
+              //       streamedListRef.current[streamedListRef.current.length - 1].content += msg.content[0].text;
+              //     }
+              //   }
+              //   startNewLineRef.current = false;
+              // }
+              // console.log(streamedListRef.current);
+              // setLiveDemoThinking([...streamedListRef.current])
+            })
           }
+
           else {
             if (event === 'updates' || event.includes('updates')) {
               let obj = Object.keys(data);
@@ -344,7 +389,8 @@ export default function workSpaceLayout() {
                   streamedPlannerTodosRef.current.push({
                     id: `planner-${Date.now()}-${Math.random()}`,
                     role: "assistant",
-                    content: content
+                    content: content,
+                    status: todo.status
                   });
                 });
                 setLiveDemoTodos([...streamedPlannerTodosRef.current]); // Update Todos State
@@ -373,10 +419,20 @@ export default function workSpaceLayout() {
                 }
               });
             }
+          }
 
+          if (assistantId == 'live_demo' && !assignTask && data[1].langgraph_node == 'assign_task') {
+            // for (let i = streamedListRef.current.length - 1; i >= 0; i--) {
+            //   if (streamedListRef.current[i].role === 'assistant') {
+            //     streamedListRef.current.splice(i, 1);
+            //   } else if (streamedListRef.current[i].role === 'user') {
+            //     break; // Stop once we hit a user message
+            //   }
+            // }
+            setNewStreamingList([...streamedListRef.current]);
+            setAssignTask(true);
           }
         },
-
         onDone: () => {
           setSearchedText('');
           setSearchedMessages([]);
@@ -530,13 +586,15 @@ export default function workSpaceLayout() {
                   video_url: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4'
                 };
               } else {
-                LiveDemoAssistantMessages.push({
+                // For history, we want to show it in the main chat, NOT the sidebar
+                return {
                   id: msg.id,
+                  type: 'demo',
                   role: msg.type === "human" ? "user" : "assistant",
                   content: content,
-                  langgraph_node: msg.langgraph_node // Preserve node info if needed
-                });
-                return null;
+                  langgraph_node: msg.langgraph_node, // Preserve node info if needed
+                  isHistory: true
+                };
               }
             }
             return null;
@@ -654,6 +712,7 @@ export default function workSpaceLayout() {
             theme='light'
             newStreamingList={newStreamingList}
             chatBodyRef={chatBodyRef}
+            hideLiveScreen={hideLiveScreen}
             input={input}
             toolCalls={toolCalls}
             isLoading={chatIsLoading}
