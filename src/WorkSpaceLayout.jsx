@@ -243,7 +243,6 @@ export default function workSpaceLayout() {
 
             let aiMessages = data.filter(msg => msg.type === "AIMessageChunk");
             aiMessages.forEach(msg => {
-              // If this chunk has tool calls, ensure we update our ref
               const hasToolUse = Array.isArray(msg.content) && msg.content.some(c => c.type === 'tool_use');
 
               if (hasToolUse) {
@@ -396,6 +395,12 @@ export default function workSpaceLayout() {
 
           if (assistantId == 'live_demo') {
             setDoneBrowser(true);
+            // setLiveDemoTodos([]);
+            // setUsedTools([]);
+            // usedToolsRef.current = [];
+            // setShowDemoSteps(false);
+            // setIsRightCollapsed(true);
+            // setLiveDemoThinking([]);
           }
           else {
             // setLoadHistoryToggle("load");
@@ -437,17 +442,18 @@ export default function workSpaceLayout() {
     setShowDemoSteps(false);
     setLiveDemoThinking([]);
     if (loadHistoryToggle.includes("load")) {
-      threadHistory(threadChatId).then(async (response) => {
+      Promise.all([
+        threadHistory(threadChatId),
+        fetchThreadById(threadChatId)
+      ]).then(async ([response, thread]) => {
         if (cancelled) return;
 
-        // Fetch thread details to get assistant_id and set it
-        fetchThreadById(threadChatId).then((thread) => {
-          if (thread && !cancelled) {
-            const threadAssistantId = thread.metadata?.assistant_id || thread.assistant_id || 'agent';
-            console.log("Setting assistant ID to:", threadAssistantId);
-            setAssistantId(thread.metadata?.graph_id);
-          }
-        }).catch(err => console.error("Failed to fetch thread details:", err));
+        let currentAssistantId = 'agent';
+        if (thread) {
+          currentAssistantId = thread.metadata?.graph_id || 'agent';
+          console.log("Setting assistant ID to:", currentAssistantId);
+          setAssistantId(currentAssistantId);
+        }
 
         setInput('');
         setSearchedText('');
@@ -463,7 +469,7 @@ export default function workSpaceLayout() {
             if (msg.type !== "human" && msg.type !== "assistant" && msg.type !== "ai") return null;
             if ((typeof msg.content !== "string") && !Array.isArray(msg.content)) return null;
 
-            if (['training_module_graph', 'agent'].includes(assistantId)) {
+            if (['training_module_graph', 'agent'].includes(currentAssistantId)) {
               if (msg.content?.length > 1 && msg.content[1].type == 'tool_use') {
                 return;
               }
@@ -528,6 +534,7 @@ export default function workSpaceLayout() {
                   id: msg.id,
                   role: msg.type === "human" ? "user" : "assistant",
                   content: content,
+                  langgraph_node: msg.langgraph_node // Preserve node info if needed
                 });
                 return null;
               }
@@ -556,19 +563,17 @@ export default function workSpaceLayout() {
   const handleStreamStop = () => {
     console.trace("handleStreamStop called"); // Trace usage
     setChatIsLoading(false);
-    const subscription = cancelRun(threadChatId, runId).subscribe({
+    cancelRun(threadChatId, runId).subscribe({
       next: (res) => {
         console.log("Stream stopped:", res);
-        subscription.unsubscribe();
       },
       error: (err) => {
         console.error("Failed to stop stream:", err);
       }
     });
-    const subscriptionCleanUp = cleanupContainer(containerId).subscribe({
+    cleanupContainer(containerId).subscribe({
       next: (res) => {
         console.log("Stream stopped:", res);
-        subscriptionCleanUp.unsubscribe();
       },
       error: (err) => {
         console.error("Failed to stop stream:", err);

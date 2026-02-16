@@ -559,6 +559,7 @@ export default function ChatSection({
         signal: abortController.signal,
         onFrame: (data) => {
           if (data.frame) {
+            console.log("Live screen frame received", `data:image/jpeg;base64,${data.frame}`);
             setLiveImageSrc(`data:image/jpeg;base64,${data.frame}`);
             setIsLiveConnected(true);
           }
@@ -586,7 +587,6 @@ export default function ChatSection({
   // Reset live demo when assignTask becomes false OR isLoading is false
   useEffect(() => {
     if ((!assignTask || !isLoading) && showLiveScreen) {
-      // Don't remove the screen, just the status
       // setShowLiveScreen(false);
       // setLiveImageSrc(null);
       setIsLiveConnected(false);
@@ -629,11 +629,11 @@ export default function ChatSection({
 
     /* ---------- TEXT ---------- */
     p: ({ node, children, ...props }) => (
-      <p className="mb-3 last:mb-0 leading-relaxed text-zinc-700 break-words" {...props}>
+      <div className="mb-3 last:mb-0 leading-relaxed text-zinc-700 break-words" {...props}>
         {React.Children.map(children, child =>
           typeof child === 'string' ? renderWithSources(child) : child
         )}
-      </p>
+      </div>
     ),
     strong: ({ node, ...props }) => (
       <strong className="font-semibold text-zinc-900" {...props} />
@@ -735,7 +735,7 @@ export default function ChatSection({
         </button>
       )}
 
-      <div className="relative flex h-full min-h-0 flex-col overflow-hidden rounded-3xl border border-zinc-200 bg-white shadow-xl">
+      <div className="relative flex h-full min-h-0 flex-col overflow-hidden rounded-3xl border-b border-x border-zinc-200 bg-white shadow-xl">
 
         <div
           ref={chatBodyRef}
