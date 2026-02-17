@@ -54,6 +54,7 @@ export async function register({ username, display_name, email, password, org_id
         storeTokens({
             access_token: data.access_token,
             refresh_token: data.refresh_token,
+
         }, true); // Default to remember me for registration
 
         // Use the form data we sent since API doesn't return user info
@@ -104,6 +105,7 @@ export async function login({ login_id, password, remember_me = false }) {
         storeTokens({
             access_token: data.access_token,
             refresh_token: data.refresh_token,
+            display_name: data.username
         }, remember_me);
 
         // Extract user data - could be nested or at root level
@@ -199,7 +201,7 @@ export async function logout(invalidateAll = false) {
  * @returns {Object|null} User object or null
  */
 export function getCurrentUser() {
-    const userStr = localStorage.getItem('access_token');
+    const userStr = localStorage.getItem('tas_user');
     if (!userStr) return null;
 
     try {

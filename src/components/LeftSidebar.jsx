@@ -236,7 +236,7 @@ export default function LeftSidebar({
 
   const getUserInitials = () => {
     if (!user) return 'U';
-    const name = user.display_name || user.username || 'User';
+    const name = user.username || 'User';
     return name.charAt(0).toUpperCase();
   };
 
@@ -402,7 +402,7 @@ export default function LeftSidebar({
           </div>
           <div className="flex-1 text-left min-w-0">
             <p className="font-semibold text-black truncate">
-              {user?.display_name || user?.username || 'User'}
+              {user?.username || user?.display_name || 'User'}
             </p>
             {user?.email && user?.email !== (user?.display_name || user?.username) && (
               <p className="text-xs text-zinc-500 truncate">

@@ -4,6 +4,7 @@
 
 const ACCESS_TOKEN_KEY = 'tas_access_token';
 const REFRESH_TOKEN_KEY = 'tas_refresh_token';
+const DISPLAY_KEY = 'tas_DisplayName';
 const USER_KEY = 'tas_user';
 
 /**
@@ -11,16 +12,18 @@ const USER_KEY = 'tas_user';
  * @param {Object} tokens - Token object containing access_token and refresh_token
  * @param {boolean} rememberMe - Whether to use localStorage (true) or sessionStorage (false)
  */
-export function storeTokens({ access_token, refresh_token }, rememberMe = false) {
+export function storeTokens({ access_token, refresh_token, display_name }, rememberMe = false) {
   const storage = localStorage;
 
   if (access_token) {
-    storage.setItem(ACCESS_TOKEN_KEY, access_token);
-    storage.setItem('access_token', access_token); // Duplicate for legacy/external compatibility
+    storage.setItem(ACCESS_TOKEN_KEY, access_token);// Duplicate for legacy/external compatibility
   }
 
   if (refresh_token) {
     storage.setItem(REFRESH_TOKEN_KEY, refresh_token);
+  }
+  if (display_name) {
+    storage.setItem(DISPLAY_KEY, display_name);
   }
 }
 
@@ -69,8 +72,8 @@ export function getUser() {
 export function clearTokens() {
   // Clear from both storages
   localStorage.removeItem(ACCESS_TOKEN_KEY);
-  localStorage.removeItem('access_token');
   localStorage.removeItem(REFRESH_TOKEN_KEY);
+  localStorage.removeItem(DISPLAY_KEY);
   localStorage.removeItem(USER_KEY);
 }
 
