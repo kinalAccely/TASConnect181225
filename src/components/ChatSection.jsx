@@ -17,7 +17,9 @@ import {
   IoSchoolOutline,
   IoSparklesOutline,
   IoArrowDownCircle,
-  IoArrowUpCircle
+  IoArrowUpCircle,
+  IoExpand,
+  IoContract
 } from "react-icons/io5";
 
 
@@ -92,6 +94,7 @@ export default function ChatSection({
   const [showLiveScreen, setShowLiveScreen] = useState(false);
   const [liveImageSrc, setLiveImageSrc] = useState(null);
   const [isLiveConnected, setIsLiveConnected] = useState(false);
+  const [isMaximized, setIsMaximized] = useState(false);
   const liveScreenConnectedRef = useRef(false);
 
   const normalizeSandboxUrl = (url) => {
@@ -978,7 +981,12 @@ export default function ChatSection({
 
           {/* LIVE SCREEN (MJPEG) */}
           {showLiveScreen && liveImageSrc && (
-            <div className="w-full h-[400px] border border-zinc-200 rounded-2xl overflow-hidden shadow-sm flex items-center justify-center bg-black relative">
+            <div className={`
+              ${isMaximized
+                ? "fixed inset-0 z-[9999] w-screen h-screen bg-black flex items-center justify-center p-4"
+                : "w-full h-[400px] border border-zinc-200 rounded-2xl overflow-hidden shadow-sm flex items-center justify-center bg-black relative"
+              }
+            `}>
 
               {/* Live Demo Header */}
               {isLiveConnected && (
@@ -988,10 +996,21 @@ export default function ChatSection({
                 </div>
               )}
 
+              {/* Maximize/Minimize Button */}
+               <button
+                onClick={() => setIsMaximized(!isMaximized)}
+                className="absolute top-4 right-4 p-2 bg-black/50 backdrop-blur-md rounded-full text-white hover:bg-black/70 transition-all z-20"
+                title={isMaximized ? "Minimize" : "Maximize"}
+              >
+                {isMaximized ? <IoContract size={20} /> : <IoExpand size={20} />}
+              </button>
+
               <img
                 src={liveImageSrc}
                 alt="Live Screen"
-                className="w-full h-full object-contain"
+                className={`
+                  ${isMaximized ? "max-w-full max-h-full object-contain" : "w-full h-full object-contain"}
+                `}
               // Initial placeholder or loader could go here
               />
             </div>
