@@ -434,7 +434,7 @@ export default function LeftSidebar({
         }`}
     >
       <aside
-        className={`flex h-full w-full flex-col rounded-3xl border bg-white/85 shadow backdrop-blur-md transition-all ${isCollapsed ? "items-center gap-6 px-3 py-4" : "gap-4 p-5"
+        className={`flex h-full w-full flex-col rounded-3xl border border-zinc-200 bg-white/85 backdrop-blur-md transition-all ${isCollapsed ? "items-center gap-6 px-3 py-4" : "gap-4 p-5"
           }`}
       >
         {isCollapsed ? collapsedContent : expandedContent}

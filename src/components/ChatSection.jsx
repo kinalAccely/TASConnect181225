@@ -737,12 +737,12 @@ export default function ChatSection({
         </button>
       )}
 
-      <div className="relative flex h-full min-h-0 flex-col overflow-hidden rounded-3xl border-b border-x border-zinc-200 bg-white shadow-xl">
+      <div className="relative flex h-full min-h-0 flex-col overflow-hidden rounded-3xl border border-zinc-200 bg-white">
 
         <div
           ref={chatBodyRef}
           onScroll={handleScroll}
-          className="flex-1 space-y-6 overflow-y-auto px-6 py-6 scroll-smooth"
+          className="flex-1 space-y-6 overflow-y-auto px-3 py-6 scroll-smooth"
         >
           {isStreamNewChat && newStreamingList.length === 0 && !isLoading && (
             <div className="flex flex-col items-center justify-center h-full px-4 md:px-12 animate-in fade-in zoom-in-95 duration-700">
@@ -822,19 +822,29 @@ export default function ChatSection({
             /* ================= USER MESSAGE ================= */
             if (isUser) {
               return (
-                <div key={msgId} className="flex w-full justify-end mt-[5px]">
-                  <div className="group relative max-w-[75%] rounded-2xl border border-[var(--brand-light)] bg-[var(--brand-lighter)] px-4 py-3 text-[13px] text-zinc-800 shadow-sm">
-                    <CopyIconButton
-                      className="absolute top-2 right-2 flex items-center gap-1 text-[11px]
-              text-zinc-400 hover:text-[var(--brand)]
-              opacity-0 group-hover:opacity-100
-              pointer-events-none group-hover:pointer-events-auto
-              transition-opacity duration-200"
-                    />
-
-                    <p className="whitespace-pre-wrap break-words">
-                      {msg.content}
-                    </p>
+                <div key={msgId} className="flex w-full mt-2 animate-in fade-in slide-in-from-right-2 duration-300">
+                  <div className="flex w-full flex-col items-end gap-1.5">
+                    <div className="group relative ml-auto w-fit max-w-[85%] rounded-2xl border border-[var(--brand-light)] bg-[var(--brand-lighter)] px-4 py-2.5 text-[13.5px] text-zinc-800 shadow-sm">
+                      <p className="whitespace-pre-wrap break-words leading-relaxed">
+                        {msg.content}
+                      </p>
+                    </div>
+                    <button
+                      onClick={() => handleCopy(msg.content, msgId)}
+                      className="flex items-center gap-1.5 text-[11px] font-medium text-zinc-400 hover:text-[var(--brand)] transition-colors px-2 py-1 rounded-lg hover:bg-zinc-50"
+                    >
+                      {copiedMessageKey === msgId ? (
+                        <>
+                          <IoCheckmark size={14} className="text-green-500" />
+                          <span className="text-green-500">Copied</span>
+                        </>
+                      ) : (
+                        <>
+                          <IoCopyOutline size={14} />
+                          <span>Copy</span>
+                        </>
+                      )}
+                    </button>
                   </div>
                 </div>
               );
@@ -869,11 +879,11 @@ export default function ChatSection({
 
             // For standard messages (or mixed content/tool calls where content exists)
             return (
-              <div key={msgId} className="flex flex-col gap-4">
+              <div key={msgId} className="flex w-full flex-col gap-4 animate-in fade-in slide-in-from-left-2 duration-300">
                 <div
-                  className={`flex flex-col gap-2 ${isTrainingModule
-                    ? "w-full max-w-5xl "
-                    : "max-w-[85%]"
+                  className={`flex flex-col gap-2 items-start ${isTrainingModule
+                    ? "w-full max-w-5xl"
+                    : "w-full"
                     }`}
                 >
                   {/* ===== HEADER ACTIONS ===== */}
@@ -910,32 +920,44 @@ export default function ChatSection({
                   {/* ===== MESSAGE BODY ===== */}
                   {/* Only render the bubble if there is actual content */}
                   {msg.content && (
-                    <div
-                      className={`group relative rounded-2xl border border-zinc-200 text-[13.5px] text-zinc-700 ${isTrainingModule
-                        ? "h-[500px] overflow-y-auto scrollbar-thin scrollbar-thumb-zinc-200 scrollbar-track-transparent border-2 bg-zinc-50/30 p-8 shadow-inner"
-                        : "bg-white px-5 py-4 shadow-sm"
-                        } ${msg.hasToolCall ? "animate-pulse" : ""}`}
-                    >
-                      {!isTrainingModule && (<CopyIconButton
-                        className="absolute top-2 right-2 text-zinc-400 hover:text-[var(--brand)]
-                            opacity-0 group-hover:opacity-100
-                            pointer-events-none group-hover:pointer-events-auto
-                            transition-opacity duration-200"
-                      />)
-                      }
-                      <ReactMarkdown
-                        remarkPlugins={[remarkGfm]}
-                        components={markdownComponents}
+                    <>
+                      <div
+                        className={`group relative ${isTrainingModule
+                          ? "h-[500px] w-full"
+                          : "mr-auto w-fit max-w-[85%]"
+                          } rounded-2xl border border-zinc-200 text-[13.5px] text-zinc-700 ${isTrainingModule
+                          ? "overflow-y-auto scrollbar-thin scrollbar-thumb-zinc-200 scrollbar-track-transparent border-2 bg-zinc-50/30 p-8 shadow-inner"
+                          : "bg-white px-5 py-3.5 shadow-sm"
+                          } ${msg.hasToolCall ? "animate-pulse" : ""}`}
                       >
-                        {msg.content || ""}
-                      </ReactMarkdown>
+                        <ReactMarkdown
+                          remarkPlugins={[remarkGfm]}
+                          components={markdownComponents}
+                        >
+                          {msg.content || ""}
+                        </ReactMarkdown>
+                      </div>
 
-                      {/* {msg.isStreaming && (
-                        <span className="inline-block ml-1 animate-pulse text-zinc-400">
-                          ▍
-                        </span>
-                      )} */}
-                    </div>
+                      {/* Copy button below message for non-training modules */}
+                      {!isTrainingModule && (
+                        <button
+                          onClick={() => handleCopy(msg.content, msgId)}
+                          className="flex items-center gap-1.5 text-[11px] font-medium text-zinc-400 hover:text-[var(--brand)] transition-colors px-2 py-1 rounded-lg hover:bg-zinc-50 self-start mt-1"
+                        >
+                          {copiedMessageKey === msgId ? (
+                            <>
+                              <IoCheckmark size={14} className="text-green-500" />
+                              <span className="text-green-500">Copied</span>
+                            </>
+                          ) : (
+                            <>
+                              <IoCopyOutline size={14} />
+                              <span>Copy</span>
+                            </>
+                          )}
+                        </button>
+                      )}
+                    </>
                   )}
 
                   {/* If there are tool calls AND content, show indicator below text */}
@@ -994,7 +1016,7 @@ export default function ChatSection({
 
 
 
-          {isLoading && newStreamingList.length > 0 && (
+          {isLoading && newStreamingList.length > 0 && !newStreamingList.some(msg => msg.role === 'assistant') && (
             <div className="flex justify-start">
               <div className="group flex items-center justify-between gap-4 w-full max-w-sm rounded-xl border border-zinc-200/50 bg-white/90 backdrop-blur-sm px-6 py-4 shadow-[0_4px_20px_-2px_rgba(0,0,0,0.05)] animate-in fade-in slide-in-from-bottom-2 duration-300 transition-all hover:bg-white">
                 <div className="flex w-full items-center justify-between relative">
@@ -1076,9 +1098,9 @@ export default function ChatSection({
           </div>
         )}
 
-        <div className="border-t border-zinc-100 bg-white p-4">
-          <div className="relative flex flex-col gap-2 rounded-2xl bg-zinc-50 p-2">
-            <div className="flex items-start gap-2">
+        <div className="w-full border-t border-zinc-100 bg-white px-3 py-4">
+          <div className="relative flex w-full flex-col gap-2 rounded-3xl bg-zinc-50/80 p-3 shadow-sm ring-1 ring-zinc-100">
+            <div className="flex w-full min-w-0 items-end gap-3">
               {activeModule && activeModule?.id !== "agent" && (
                 <div className="flex items-center gap-1.5 bg-[var(--brand)] text-white px-2.5 py-2 rounded-xl text-[11px] font-bold shadow-sm">
                   <IoLayersOutline size={14} />
@@ -1098,6 +1120,7 @@ export default function ChatSection({
                 rows={1}
                 value={input}
                 onChange={(e) => onInputChange(e.target.value)}
+                wrap="off"
                 onKeyDown={(e) => {
                   if (e.key === "Enter" && !e.shiftKey) {
                     e.preventDefault();
@@ -1112,7 +1135,7 @@ export default function ChatSection({
                     ? "Type / to change mode..."
                     : "Reply..."
                 }
-                className="flex-1 resize-none text-sm py-2.5 px-2 min-h-[44px] max-h-[200px]
+                className="w-full flex-1 min-w-0 resize-none text-sm py-2.5 px-3 min-h-[44px] max-h-[200px] overflow-y-auto whitespace-pre-wrap
              border-0 outline-none focus:outline-none focus:ring-0
              bg-transparent"
 
@@ -1121,7 +1144,7 @@ export default function ChatSection({
 
               <button
                 onClick={isLoading ? onStop : handleSubmit}
-                className="self-end mb-1 p-2.5 bg-[var(--brand)] text-white rounded-xl shadow-lg"
+                className="shrink-0 self-end mb-1 p-2.5 bg-[var(--brand)] text-white rounded-xl shadow-lg"
               >
                 {isLoading ? (
                   <IoStopCircleOutline size={22} />
