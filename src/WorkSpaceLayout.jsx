@@ -646,7 +646,16 @@ export default function workSpaceLayout() {
     const currentContainerId = containerIdRef.current;
     if (currentThreadId && currentRunId) {
       cancelRun(currentThreadId, currentRunId).subscribe({
-        next: (res) => console.log("Run cancelled:", res),
+        next: (res) => {
+          console.log("Run cancelled:", res);
+          navigate(`/chat/${threadChatId}`, {
+            replace: true, state: {
+              initialMessage: null,
+              assistant_id: assistantId
+            }
+          });
+
+        },
         error: (err) => console.error("Failed to cancel run:", err),
       });
     }
