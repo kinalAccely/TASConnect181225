@@ -25,11 +25,6 @@ export const handleAuthError = (response) => {
     if (response.status === 401) {
         clearTokens();
         window.location.href = "/login";
-        // We might want to throw or return a rejected promise to stop further execution, 
-        // but returning the response allows individual callers to handle it if they really want, 
-        // though the redirect will happen. 
-        // Usually throwing is better to stop downstream logic that expects success/data.
-        // However, existing logic checks response.ok.
     }
     return response;
 };

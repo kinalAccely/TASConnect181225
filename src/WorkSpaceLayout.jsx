@@ -56,7 +56,12 @@ export default function workSpaceLayout() {
   const hasResultRef = useRef(false);
   const streamedListRef = useRef([]);
   const streamedDemoListRef = useRef([]);
+  const abortControllerRef = useRef(null);
   const streamedPlannerTodosRef = useRef([]); // New ref for Todos
+  // Refs to always hold the latest values for use inside callbacks (stale-closure fix)
+  const threadChatIdRef = useRef('');
+  const runIdRef = useRef('');
+  const containerIdRef = useRef('');
   const [chatIsLoading, setChatIsLoading] = useState(false);
   const [isStreamNewChat, setIsStreamNewChat] = useState(true);
   const [loadHistoryToggle, setLoadHistoryToggle] = useState("load");
@@ -75,6 +80,11 @@ export default function workSpaceLayout() {
   const isToolCallRef = useRef(false);
 
   const [containerId, setContainerId] = useState('');
+
+  // Keep refs in sync with state so stop handler always has fresh values
+  useEffect(() => { threadChatIdRef.current = selectedThreadChatId; }, [selectedThreadChatId]);
+  useEffect(() => { runIdRef.current = runId; }, [runId]);
+  useEffect(() => { containerIdRef.current = containerId; }, [containerId]);
   const [showDemoSteps, setShowDemoSteps] = useState('');
 
 
@@ -112,6 +122,7 @@ export default function workSpaceLayout() {
   useEffect(() => {
     setIsRightCollapsed(true)
   }, [!threadChatId])
+
 
   const shouldShowAssistantSuggestions = showAssistantChooser && !threadChatId;
 
@@ -214,8 +225,11 @@ export default function workSpaceLayout() {
     setChatIsLoading(true);
     setHideLiveScreen(`Date_${Date.now()}`);
     setTimeout(() => {
+      // Create a fresh AbortController for this stream
+      abortControllerRef.current = new AbortController();
       getStreamMessages({
         url: `/threads/${threadChatId}/runs/stream`,
+        signal: abortControllerRef.current.signal,
         body: {
           input: {
             messages: [{ role: "user", content: searchedText }]
@@ -619,24 +633,29 @@ export default function workSpaceLayout() {
 
 
   const handleStreamStop = () => {
-    console.trace("handleStreamStop called"); // Trace usage
+    console.trace("handleStreamStop called");
+    // Abort the active SSE fetch connection immediately (client-side)
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort();
+      abortControllerRef.current = null;
+    }
     setChatIsLoading(false);
-    cancelRun(threadChatId, runId).subscribe({
-      next: (res) => {
-        console.log("Stream stopped:", res);
-      },
-      error: (err) => {
-        console.error("Failed to stop stream:", err);
-      }
-    });
-    cleanupContainer(containerId).subscribe({
-      next: (res) => {
-        console.log("Stream stopped:", res);
-      },
-      error: (err) => {
-        console.error("Failed to stop stream:", err);
-      }
-    });
+    // Use refs so we always cancel the correct run, even if state is stale
+    const currentThreadId = threadChatIdRef.current;
+    const currentRunId = runIdRef.current;
+    const currentContainerId = containerIdRef.current;
+    if (currentThreadId && currentRunId) {
+      cancelRun(currentThreadId, currentRunId).subscribe({
+        next: (res) => console.log("Run cancelled:", res),
+        error: (err) => console.error("Failed to cancel run:", err),
+      });
+    }
+    if (currentContainerId) {
+      cleanupContainer(currentContainerId).subscribe({
+        next: (res) => console.log("Container cleaned up:", res),
+        error: (err) => console.error("Failed to cleanup container:", err),
+      });
+    }
   }
 
   const openNewChat = () => {
